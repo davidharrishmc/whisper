@@ -4448,8 +4448,11 @@ Mcm<URV>::ppoRule5(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
 
   auto hartIx = hart.sysHartIndex();
 
-  // B performs before A -- Allow if there is no write from another hart, overlapping line
-  // of B, at time between times of A and B.
+  // B performs before A -- Allow if A is a load there is no write from another hart,
+  // overlapping line of B, at time between times of A and B.
+  if (not instrB.isLoad_)
+    return false;
+
   for (size_t ix = sysMemOps_.size(); ix != 0; ix--)
     {
       const auto& op = sysMemOps_.at(ix-1);
