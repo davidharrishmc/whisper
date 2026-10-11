@@ -4873,7 +4873,12 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
   else if (csr == CN::VSSTATUS)
     updateCachedVsstatus();
 
-  if (csRegs_.peekMstatus() != mstatus_.value() or csr == CN::MSTATUSH)
+  // On RV32, mstatus_ caches mstatush:mstatus, so compare both halves.
+  bool mstatusChanged = csRegs_.peekMstatus() != URV(mstatus_.value());
+  if constexpr (sizeof(URV) == 4)
+    mstatusChanged = mstatusChanged or peekCsr(CN::MSTATUSH) != mstatus_.value_.high_;
+
+  if (mstatusChanged or csr == CN::MSTATUSH)
     {
       updateCachedMstatus();
       if (isRvsmdbltrp() and mstatus_.bits_.MDT)
@@ -4891,7 +4896,8 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
         }
       csRegs_.recordWrite(CN::MSTATUS);
     }
-  else if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
+
+  if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
     {
       updateCachedHstatus();
       if (csRegs_.peekHstatus() != hstatus_.value())
