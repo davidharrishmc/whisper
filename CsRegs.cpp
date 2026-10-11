@@ -5695,9 +5695,9 @@ CsRegs<URV>::defineHypervisorRegs()
   csr = defineCsr("hgeip",       Csrn::HGEIP,       !mand, !imp, 0, mask, pokeMask);
   csr->setHypervisor(true);
 
-  URV henvMask = 0xed;
+  URV henvMask = 0xfd;
   if constexpr (sizeof(URV) == 8)
-    henvMask = 0xf8000003000000fd;
+    henvMask = 0xe8000003000000fd;
   csr = defineCsr("henvcfg",     Csrn::HENVCFG,     !mand, !imp, 0, henvMask, henvMask);
   csr->setHypervisor(true);
 
