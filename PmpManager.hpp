@@ -148,10 +148,10 @@ namespace WdRiscv
       fastRegion_.reset();
     }
 
-    /// Return the physical memory protection object (pmp) associated
-    /// with the word-aligned word designated by the given
-    /// address. Return a no-access object if the given address is out
-    /// of memory range.
+    /// Return the physical memory protection object (pmp) that decides an
+    /// access of size bytes at the given address: that of the
+    /// lowest-numbered entry matching any byte of the access. Return a
+    /// no-access object if that entry does not match all the bytes.
     Pmp getPmp(PrivilegeMode pm, uint64_t addr, unsigned size) const
     {
       bool machine = pm == PrivilegeMode::Machine;
@@ -163,13 +163,15 @@ namespace WdRiscv
           return Pmp{}; // No access: region does not contain all bytes.
         }
 
+      // The lowest-numbered entry matching any byte decides. It must match all bytes.
+      uint64_t last = addr + size - 1;
       for (unsigned ix = 0; ix < regions_.size(); ++ix)
         {
           const auto& region = regions_.at(ix);
-          if (region.contains(addr))
+          if (region.overlaps(addr, last))
             {
               updateCachedRegion(region, ix);
-              if (not region.contains(addr + size - 1))
+              if (not region.contains(addr) or not region.contains(last))
                 return Pmp{}; // No access: region does not contain all bytes.
               return machine ? region.mpmp_ : region.spmp_;
             }
@@ -571,6 +573,10 @@ namespace WdRiscv
 
       bool contains(uint64_t addr) const
       { return addr >= addr0_ and addr <= addr1_; }
+
+      /// Return true if this region contains any byte in the range [addr, last].
+      bool overlaps(uint64_t addr, uint64_t last) const
+      { return addr0_ <= addr1_ and addr <= addr1_ and last >= addr0_; }
     };
 
     struct FastRegion

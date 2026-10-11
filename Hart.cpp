@@ -2040,13 +2040,19 @@ Hart<URV>::determineLoadException(uint64_t& addr1, uint64_t& addr2, uint64_t& ga
   steeInsec1_ = false;
   steeInsec2_ = false;
 
-  auto checkPa = [this, pm, ldSize, misal, amo] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
+  // True if a misaligned access is within a misaligned atomicity granule.
+  bool inMag = false;
+
+  auto checkPa = [this, pm, ldSize, misal, amo, va1, va2, &inMag] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
     ldStFaultAddr_ = va;
 
-    // If checking the lower part of a misal address, do not cross alignment boundary.
+    // A misaligned access is checked as a lower part that does not cross the alignment
+    // boundary and an upper part with the remaining bytes. Within a misaligned atomicity
+    // granule it is a single memory operation, so the lower check covers all its bytes.
+    // If va1 is 0xffc and size is 8, then the parts are 4 bytes each.
     auto size = ldSize;
-    if (lower and misal)
-      size = ((pa + (size - 1)) & ~uint64_t(size - 1)) - pa;
+    if (misal)
+      size = lower ? (inMag ? ldSize : unsigned(va2 - va1)) : unsigned(va1 + ldSize - va2);
 
     if (pmpEnabled_)
       {
@@ -2119,6 +2125,13 @@ Hart<URV>::determineLoadException(uint64_t& addr1, uint64_t& addr2, uint64_t& ga
     }
   else
     {
+      uint64_t pmaAddr = steeEnabled_ ? stee_.clearSecureBits(pa1) : pa1;
+      if (auto mag = getPma(pmaAddr).misalAtomicGranule(); mag)
+        {
+          auto mask = ~uint64_t(mag - 1);
+          inMag = (pa1 & mask) == ((pa1 + ldSize - 1) & mask);
+        }
+
       if (inSeqnMisaligned_)
         if (auto cause = checkPa(va1, addr1, ldStPma1_, true); cause != EC::NONE)
           return cause;
@@ -13936,14 +13949,19 @@ Hart<URV>::determineStoreException(uint64_t& addr1, uint64_t& addr2,
   steeInsec1_ = false;
   steeInsec2_ = false;
 
-  auto checkPa = [this, pm, stSize, misal, amo] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
+  // True if a misaligned access is within a misaligned atomicity granule.
+  bool inMag = false;
+
+  auto checkPa = [this, pm, stSize, misal, amo, va1, va2, &inMag] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
     ldStFaultAddr_ = va;
 
-    // If checking the lower part of a misal address, do not cross alignment boundary.
-    // If pa is 0xffc and size is 8, then size becomes 4 (dist to next multiple of 8).
+    // A misaligned access is checked as a lower part that does not cross the alignment
+    // boundary and an upper part with the remaining bytes. Within a misaligned atomicity
+    // granule it is a single memory operation, so the lower check covers all its bytes.
+    // If va1 is 0xffc and size is 8, then the parts are 4 bytes each.
     auto size = stSize;
-    if (lower and misal)
-      size = ((pa + (size - 1)) & ~uint64_t(size - 1)) - pa;
+    if (misal)
+      size = lower ? (inMag ? stSize : unsigned(va2 - va1)) : unsigned(va1 + stSize - va2);
 
     if (pmpEnabled_)
       {
@@ -14014,6 +14032,13 @@ Hart<URV>::determineStoreException(uint64_t& addr1, uint64_t& addr2,
     }
   else
     {
+      uint64_t pmaAddr = steeEnabled_ ? stee_.clearSecureBits(pa1) : pa1;
+      if (auto mag = getPma(pmaAddr).misalAtomicGranule(); mag)
+        {
+          auto mask = ~uint64_t(mag - 1);
+          inMag = (pa1 & mask) == ((pa1 + stSize - 1) & mask);
+        }
+
       if (inSeqnMisaligned_)
         if (auto cause = checkPa(va1, addr1, ldStPma1_, true); cause != EC::NONE)
           return cause;
