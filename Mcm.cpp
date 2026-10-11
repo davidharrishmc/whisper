@@ -5259,9 +5259,9 @@ Mcm<URV>::ppoRule12(Hart<URV>& hart, const McmInstr& instrB) const
 	  uint64_t addr = op.pa_ + i;
 	  auto iter = byteMap.find(addr);
 	  if (iter != byteMap.end())
-	    iter->second.time_ = std::min(iter->second.time_, op.forwardTime(addr));
+	    iter->second.time_ = std::min(iter->second.time_, op.time_);
 	  else
-	    byteMap[addr] = ByteInfo{0, op.forwardTime(addr)};
+	    byteMap[addr] = ByteInfo{0, op.time_};
 	}
     }
 
