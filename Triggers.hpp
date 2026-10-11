@@ -567,65 +567,65 @@ namespace WdRiscv
     bool matchInstOpcode(URV opcode, TriggerTiming timing,
                          PrivilegeMode mode, bool virtMode) const;
     bool matchTextraScontext(URV scontext, URV asid, unsigned asidLen) const
-	{
-	  // RV64:
-	  //   sselect   = bits 1:0, sbytemask = bits 35:32, svalue= bits 63:51
-	  // RV32:
-	  //   sselect   = bits 1:0, sbytemask = bits 19:16, svalue = bits 31:26.
+    {
+      // RV64:
+      //   sselect   = bits 1:0, sbytemask = bits 35:32, svalue= bits 63:51
+      // RV32:
+      //   sselect   = bits 1:0, sbytemask = bits 19:16, svalue = bits 31:26.
 
-	   if constexpr (sizeof(URV) == 8)
-	    {
-	      unsigned sselect = unsigned(data3_ & URV(0x3));
+      if constexpr (sizeof(URV) == 8)
+        {
+          unsigned sselect = unsigned(data3_ & URV(0x3));
 
-	      if (sselect == 0 or sselect == 3)
-		return true;
-	      if (sselect == 2)                      //ASID match
-	      {
-		      URV svalue = data3_ >> 2; 
-		      URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
-		      return (svalue & amask) == (asid & amask);
-	      }
+          if (sselect == 0 or sselect == 3)
+            return true;
+          if (sselect == 2)                      //ASID match
+            {
+              URV svalue = data3_ >> 2; 
+              URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
+              return (svalue & amask) == (asid & amask);
+            }
 
-	      URV svalue = (data3_ >> 2) & URV(0xffffffff);
-	      unsigned sbytemask = unsigned((data3_ >> 36) & URV(0xf));
+          URV svalue = (data3_ >> 2) & URV(0xffffffff);
+          unsigned sbytemask = unsigned((data3_ >> 36) & URV(0xf));
 
-	      URV mask = URV(0);
+          URV mask = URV(0);
 
-	      for (unsigned i = 0; i < 4; ++i)
-		{
-		  if ((sbytemask >> i) & 1)
-		    mask |= ~(URV(0xff) << (8 * i));
-		}
+          for (unsigned i = 0; i < 4; ++i)
+            {
+              if ((sbytemask >> i) & 1)
+                mask |= ~(URV(0xff) << (8 * i));
+            }
 
-	      return (scontext & mask) == (svalue & mask);
-	    }
-	  else
-	    {
-	      unsigned sselect = unsigned(data3_ & URV(0x3));
+          return (scontext & mask) == (svalue & mask);
+        }
+      else
+        {
+          unsigned sselect = unsigned(data3_ & URV(0x3));
 
-	      if (sselect == 0 or sselect == 3)
-		return true;
- 	      if (sselect == 2)                      // NEW: ASID match
-	      {
-		      URV svalue = data3_ >> 2;  
-		      URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
-		      return (svalue & amask) == (asid & amask);
-	      }
+          if (sselect == 0 or sselect == 3)
+            return true;
+          if (sselect == 2)                      // NEW: ASID match
+            {
+              URV svalue = data3_ >> 2;  
+              URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
+              return (svalue & amask) == (asid & amask);
+            }
 
-	      URV svalue = (data3_ >> 2) & URV(0xfff);
-	      unsigned sbytemask = unsigned((data3_ >> 18) & URV(0x3));
+          URV svalue = (data3_ >> 2) & URV(0xfff);
+          unsigned sbytemask = unsigned((data3_ >> 18) & URV(0x3));
 
-	      URV mask = URV(0);
+          URV mask = URV(0);
 
-	      for (unsigned i = 0; i < 2; ++i)
-		{
-		  if ((sbytemask >> i) & 1)
-		    mask |= ~(URV(0xff) << (8 * i));
-		}
+          for (unsigned i = 0; i < 2; ++i)
+            {
+              if ((sbytemask >> i) & 1)
+                mask |= ~(URV(0xff) << (8 * i));
+            }
 
-	      return (scontext & mask) == (svalue & mask);
-	    }
-	}
+          return (scontext & mask) == (svalue & mask);
+        }
+    }
 
     bool matchTextraMcontext(URV mcontext) const
     {
