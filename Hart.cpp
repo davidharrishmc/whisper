@@ -12493,6 +12493,9 @@ namespace WdRiscv
     if (breakpOrEnterDebugTripped())
       return;
 
+    if (sdtrigOn_)
+      csRegs_.restoreTcontrolMte();
+
     // 1. Restore privilege mode, interrupt enable, and virtual mode.
     uint32_t value = csRegs_.peekMstatus();
     uint32_t hvalue = peekCsr(CsrNumber::MSTATUSH);
