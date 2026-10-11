@@ -630,8 +630,12 @@ Hart<URV>::processExtensions(bool verbose)
       enableExtension(RvExtension::M, flag);
       enableExtension(RvExtension::Zmmul, flag);
     }
-  else if (flag)
-    std::cerr << "Warning: Multiply extension (M) is not in the ISA string yet MISA.M is being set.\n";
+  else
+    {
+      enableExtension(RvExtension::M, false);  // M is on by default (Hart constructor)
+      if (flag)
+        std::cerr << "Warning: Multiply extension (M) is not in the ISA string yet MISA.M is being set.\n";
+    }
 
   flag = value & (URV(1) << ('v' - 'a'));  // User-mode option.
   if (flag and not (extensionIsEnabled(RvExtension::F) and extensionIsEnabled(RvExtension::D)))
