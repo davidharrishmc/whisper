@@ -194,7 +194,14 @@ Hart<URV>::vectorLoad(const DecodedInst* di, ElementWidth eew, bool faultFirst)
         {
 	  uint64_t data = 0;
           if (not readForLoad<ELEM_TYPE>(di, addr, pa1, pa2, data, ix))
-	    assert(0 && "Error: Assertion failed");
+            {
+              // readForLoad returns false when a load-data trigger trips on this element.
+              assert(breakpOrEnterDebugTripped());
+              ldStInfo.removeLastElem();
+              markVsDirty();
+              csRegs_.write(CsrNumber::VSTART, PrivilegeMode::Machine, ix);
+              return false;
+            }
 	  elem = data;
           ldStInfo.setLastElem(pa1, pa2, elem);
 
@@ -634,8 +641,15 @@ Hart<URV>::vectorLoadWholeReg(const DecodedInst* di, ElementWidth eew)
       if (cause == ExceptionCause::NONE)
 	{
 	  uint64_t data = 0;
-	  if (not readForLoad<ELEM_TYPE>(di, addr, pa1, pa2, data, ix))
-	    assert(0 && "Error: Assertion failed");
+          if (not readForLoad<ELEM_TYPE>(di, addr, pa1, pa2, data, ix))
+            {
+              // readForLoad returns false when a load-data trigger trips on this element.
+              assert(breakpOrEnterDebugTripped());
+              ldStInfo.removeLastElem();
+              markVsDirty();
+              csRegs_.write(CsrNumber::VSTART, PrivilegeMode::Machine, ix);
+              return false;
+            }
 	  ELEM_TYPE elem = data;
 
 #ifndef FAST_SLOPPY
@@ -1014,8 +1028,15 @@ Hart<URV>::vectorLoadStrided(const DecodedInst* di, ElementWidth eew)
       if (cause == ExceptionCause::NONE)
         {
 	  uint64_t data = 0;
-	  if (not readForLoad<ELEM_TYPE>(di, addr, pa1, pa2, data, ix))
-	    assert(0 && "Error: Assertion failed");
+          if (not readForLoad<ELEM_TYPE>(di, addr, pa1, pa2, data, ix))
+            {
+              // readForLoad returns false when a load-data trigger trips on this element.
+              assert(breakpOrEnterDebugTripped());
+              ldStInfo.removeLastElem();
+              markVsDirty();
+              csRegs_.write(CsrNumber::VSTART, PrivilegeMode::Machine, ix);
+              return false;
+            }
 	  elem = data;
           ldStInfo.setLastElem(pa1, pa2, elem);
         }
@@ -1363,8 +1384,15 @@ Hart<URV>::vectorLoadIndexed(const DecodedInst* di, ElementWidth offsetEew)
       if (cause == ExceptionCause::NONE)
 	{
 	  uint64_t data = 0;
-	  if (not readForLoad<ELEM_TYPE>(di, vaddr, pa1, pa2, data, ix))
-	    assert(0 && "Error: Assertion failed");
+          if (not readForLoad<ELEM_TYPE>(di, vaddr, pa1, pa2, data, ix))
+            {
+              // readForLoad returns false when a load-data trigger trips on this element.
+              assert(breakpOrEnterDebugTripped());
+              ldStInfo.removeLastElem();
+              markVsDirty();
+              csRegs_.write(CsrNumber::VSTART, PrivilegeMode::Machine, ix);
+              return false;
+            }
 	  elem = data;
           ldStInfo.setLastElem(pa1, pa2, elem);
 	  vecRegs_.write(vd, ix, groupX8, elem);
@@ -2008,8 +2036,18 @@ Hart<URV>::vectorLoadSeg(const DecodedInst* di, ElementWidth eew,
 	  if (cause == ExceptionCause::NONE)
             {
 	      uint64_t data = 0;
-	      if (not readForLoad<ELEM_TYPE>(di, faddr, pa1, pa2, data, ix, field))
-		assert(0 && "Error: Assertion failed");
+              if (not readForLoad<ELEM_TYPE>(di, faddr, pa1, pa2, data, ix, field))
+                {
+                  // readForLoad returns false when a load-data trigger trips on this element.
+                  assert(breakpOrEnterDebugTripped());
+                  ldStInfo.removeLastElem();
+                  if (not vecRegs_.partialSegLoad_)
+                    while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
+                      ldStInfo.removeLastElem();
+                  markVsDirty();
+                  csRegs_.write(CsrNumber::VSTART, PrivilegeMode::Machine, ix);
+                  return false;
+                }
 	      elem = data;
               ldStInfo.setLastElem(pa1, pa2, elem);
             }
@@ -2629,7 +2667,17 @@ Hart<URV>::vectorLoadSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
             {
               uint64_t data = 0;
               if (not readForLoad<ELEM_TYPE>(di, faddr, pa1, pa2, data, ix, field))
-                assert(0 && "Error: Assertion failed");
+                {
+                  // readForLoad returns false when a load-data trigger trips on this element.
+                  assert(breakpOrEnterDebugTripped());
+                  ldStInfo.removeLastElem();
+                  if (not vecRegs_.partialSegLoad_)
+                    while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
+                      ldStInfo.removeLastElem();
+                  markVsDirty();
+                  csRegs_.write(CsrNumber::VSTART, PrivilegeMode::Machine, ix);
+                  return false;
+                }
               elem = data;
               ldStInfo.setLastElem(pa1, pa2, elem);
 
