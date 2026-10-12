@@ -4915,7 +4915,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
         }
       csRegs_.recordWrite(CN::MSTATUS);
     }
-  else if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
+  if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
     {
       updateCachedHstatus();
       if (csRegs_.peekHstatus() != hstatus_.value())
