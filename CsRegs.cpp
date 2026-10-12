@@ -5756,7 +5756,8 @@ CsRegs<URV>::defineHypervisorRegs()
   csr = defineCsr("vsie",        Csrn::VSIE,        !mand, !imp, 0, wam, wam);
   csr->setHypervisor(true);
 
-  csr = defineCsr("vstvec",      Csrn::VSTVEC,      !mand, !imp, 0, wam, wam);
+  mask = ~URV(2);
+  csr = defineCsr("vstvec",      Csrn::VSTVEC,      !mand, !imp, 0, mask, mask);
   csr->setHypervisor(true);
   csr = defineCsr("vsscratch",    Csrn::VSSCRATCH,   !mand, !imp, 0, wam, wam);
   csr->setHypervisor(true);
