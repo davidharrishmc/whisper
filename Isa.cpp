@@ -142,6 +142,7 @@ static constexpr auto STRING_EXT_PAIRS = std::to_array<std::pair<std::string_vie
   { "smcntrpmf", RvExtension::Smcntrpmf },
   { "smepmp", RvExtension::Smepmp },
 });
+
 static_assert(STRING_EXT_PAIRS.size() == static_cast<unsigned>(RvExtension::None));
 
 const std::unordered_map<std::string_view, RvExtension> Isa::stringToExt_(STRING_EXT_PAIRS.cbegin(),
@@ -620,6 +621,14 @@ Isa::applyIsaString(std::string_view isaStr)
       if (not parseIsa(token, extension, version, subversion))
 	return false;
 
+      if (extension == "g")
+        {
+          using enum RvExtension;
+          for (auto ext : { I, M, F, A, D, Zicsr, Zifencei })
+            enable(ext, true);
+          continue;
+        }
+
       RVE ext = stringToExtension(extension);
       if (ext == RVE::None)
 	{
@@ -680,6 +689,7 @@ Isa::applyIsaString(std::string_view isaStr)
 //  { RvExtension::Smip,     RvExtension::Smcsps,   "smip",     "smcsps"   },
 //  { RvExtension::Ssip,     RvExtension::Sscsps,   "ssip",     "sscsps"   },
   });
+
   bool depsOk = true;
   for (const auto& d : deps)
     if (isEnabled(d.ext) and not isEnabled(d.req))
@@ -688,6 +698,7 @@ Isa::applyIsaString(std::string_view isaStr)
                   << " but " << d.reqName << " is not in the ISA string.\n";
         depsOk = false;
       }
+
   if (not depsOk)
     return false;
 
