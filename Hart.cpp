@@ -801,20 +801,9 @@ Hart<URV>::processExtensions(bool verbose)
         std::cerr << "Warning: Extension Smcdeleg requires Sscsrind which is not enabled\n";
     }
 
-  if (isa_.isEnabled(RvExtension::Zvknha) and isa_.isEnabled(RvExtension::Zvknhb))
-    {
-      std::cerr << "Info: Both Zvknha/b enabled.";
-      if (rv64_)
-        {
-          std::cerr << "Info:  Using Zvknhb.\n";
-          enableExtension(RvExtension::Zvknha, false);
-        }
-      else
-        {
-          std::cerr << "Info:  Using Zvknha.\n";
-          enableExtension(RvExtension::Zvknhb, false);
-        }
-    }
+  // Zvknhb implies Zvknha and is legal on RV32; it depends on Zve64x, not XLEN.
+  if (isa_.isEnabled(RvExtension::Zvknhb))
+    enableExtension(RvExtension::Zvknha, true);
 
   enableSmmpm(isa_.isEnabled(RvExtension::Smmpm));
   enableSsnpm(isa_.isEnabled(RvExtension::Ssnpm));
@@ -4929,7 +4918,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
         }
       csRegs_.recordWrite(CN::MSTATUS);
     }
-  else if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
+  if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
     {
       updateCachedHstatus();
       if (csRegs_.peekHstatus() != hstatus_.value())
