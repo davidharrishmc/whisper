@@ -802,6 +802,20 @@ Hart<URV>::processExtensions(bool verbose)
         }
     }
 
+  if (isa_.isEnabled(RvExtension::Zkn))
+    {
+      using enum RvExtension;
+      for (auto ext : { Zbkb, Zbkc, Zbkx, Zkne, Zknd, Zknh })
+        enableExtension(ext, true);
+    }
+
+  if (isa_.isEnabled(RvExtension::Zks))
+    {
+      using enum RvExtension;
+      for (auto ext : { Zbkb, Zbkc, Zbkx, Zkne, Zksed, Zksh })
+        enableExtension(ext, true);
+    }
+
   enableSmmpm(isa_.isEnabled(RvExtension::Smmpm));
   enableSsnpm(isa_.isEnabled(RvExtension::Ssnpm));
   enableSmnpm(isa_.isEnabled(RvExtension::Smnpm));
