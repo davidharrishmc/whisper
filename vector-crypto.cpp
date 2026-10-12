@@ -2105,12 +2105,13 @@ Hart<URV>::execVsha2ms_vv(const DecodedInst* di)
   EW sew = vecRegs_.elemWidth();
   unsigned vd = di->op0(),  vs1 = di->op1(),  vs2 = di->op2();
 
+  // SEW=32 (SHA-256) is Zvknha or Zvknhb; SEW=64 (SHA-512) is Zvknhb only.
+  bool sha256 = sew == EW::Word and (isRvzvknha() or isRvzvknhb());
+  bool sha512 = sew == EW::Word2 and isRvzvknhb();
   if (groupx8*vecRegs_.bitsPerRegister()/8 < egw or
-      (not isRvzvknha() and not isRvzvknhb()) or
+      not (sha256 or sha512) or
       (vs1 + group > vd and vd + group > vs1) or
-      (vs2 + group > vd and vd + group > vs2) or
-      (isRvzvknha() and sew != EW::Word) or
-      (isRvzvknhb() and sew != EW::Word and sew != EW::Word2))
+      (vs2 + group > vd and vd + group > vs2))
     {
       illegalInst(di);
       return;
@@ -2186,12 +2187,13 @@ Hart<URV>::execVsha2ch_vv(const DecodedInst* di)
   EW sew = vecRegs_.elemWidth();
   unsigned vd = di->op0(),  vs1 = di->op1(),  vs2 = di->op2();
 
+  // SEW=32 (SHA-256) is Zvknha or Zvknhb; SEW=64 (SHA-512) is Zvknhb only.
+  bool sha256 = sew == EW::Word and (isRvzvknha() or isRvzvknhb());
+  bool sha512 = sew == EW::Word2 and isRvzvknhb();
   if (groupx8*vecRegs_.bitsPerRegister()/8 < egw or
-      (not isRvzvknha() and not isRvzvknhb()) or
+      not (sha256 or sha512) or
       (vs1 + group > vd and vd + group > vs1) or
-      (vs2 + group > vd and vd + group > vs2) or
-      (isRvzvknha() and sew != EW::Word) or
-      (isRvzvknhb() and sew != EW::Word and sew != EW::Word2))
+      (vs2 + group > vd and vd + group > vs2))
     {
       illegalInst(di);
       return;
@@ -2271,12 +2273,13 @@ Hart<URV>::execVsha2cl_vv(const DecodedInst* di)
   EW sew = vecRegs_.elemWidth();
   unsigned vd = di->op0(),  vs1 = di->op1(),  vs2 = di->op2();
 
+  // SEW=32 (SHA-256) is Zvknha or Zvknhb; SEW=64 (SHA-512) is Zvknhb only.
+  bool sha256 = sew == EW::Word and (isRvzvknha() or isRvzvknhb());
+  bool sha512 = sew == EW::Word2 and isRvzvknhb();
   if (groupx8*vecRegs_.bitsPerRegister()/8 < egw or
-      (not isRvzvknha() and not isRvzvknhb()) or
+      not (sha256 or sha512) or
       (vs1 + group > vd and vd + group > vs1) or
-      (vs2 + group > vd and vd + group > vs2) or
-      (isRvzvknha() and sew != EW::Word) or
-      (isRvzvknhb() and sew != EW::Word and sew != EW::Word2))
+      (vs2 + group > vd and vd + group > vs2))
     {
       illegalInst(di);
       return;
