@@ -5234,7 +5234,7 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
       if (not csr)
 	return false;
 
-      URV misaReset = csr->getResetValue();
+      URV misaReset = 0;
       if (isa_.isEnabled(RvExtension::A))
 	misaReset |= URV(1);
       if (isa_.isEnabled(RvExtension::B))
@@ -5243,12 +5243,20 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
 	misaReset |= URV(4);
       if (isa_.isEnabled(RvExtension::D))
 	misaReset |= URV(8);
+      if (isa_.isEnabled(RvExtension::E))
+        misaReset |= URV(16);
+      else
+        misaReset |= URV(1) << ('I' - 'A');
       if (isa_.isEnabled(RvExtension::F))
 	misaReset |= URV(1) << ('F' - 'A');
       if (isa_.isEnabled(RvExtension::H))
 	misaReset |= URV(1) << ('H' - 'A');
       if (isa_.isEnabled(RvExtension::M))
 	misaReset |= URV(1) << ('M' - 'A');
+      if (isa_.isEnabled(RvExtension::S))
+	misaReset |= URV(1) << ('S' - 'A');
+      if (isa_.isEnabled(RvExtension::U))
+	misaReset |= URV(1) << ('U' - 'A');
       if (isa_.isEnabled(RvExtension::V))
 	misaReset |= URV(1) << ('V' - 'A');
 
