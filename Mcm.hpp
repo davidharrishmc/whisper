@@ -548,6 +548,10 @@ namespace WdRiscv
 
   protected:
 
+    /// Helper to ppoRule2: Check PPO rule-2 for the elements of an indexed vector load
+    /// instruction.
+    bool ppoRule2VecLdIx(Hart<URV>& hart, const McmInstr& instrB) const;
+
     /// Helper to public readOp which splits line crossing ops into two calling this
     /// method for each.
     bool readOp_(Hart<URV>& hart, uint64_t time, uint64_t tag, uint64_t pa, unsigned size,
