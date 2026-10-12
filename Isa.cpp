@@ -31,6 +31,10 @@ static constexpr auto STRING_EXT_PAIRS = std::to_array<std::pair<std::string_vie
   { "zfh", RvExtension::Zfh },
   { "zfhmin", RvExtension::Zfhmin },
   { "zlssegh", RvExtension::Zlsseg },
+  { "zk", RvExtension::Zk },
+  { "zkt", RvExtension::Zkt },
+  { "zkn", RvExtension::Zkn },
+  { "zks", RvExtension::Zks },
   { "zknd", RvExtension::Zknd },
   { "zkne", RvExtension::Zkne },
   { "zknh", RvExtension::Zknh },
@@ -190,6 +194,10 @@ Isa::Isa()
   infoVec_.at(extIx(RvExtension::Zfa)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zfhmin)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zlsseg)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zk)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zkt)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zkn)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zks)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zknd)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zkne)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zknh)) = Info{ {{1,0}}, {1,0} };
