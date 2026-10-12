@@ -188,6 +188,9 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
   if (not determineIsa(config, args, clib, isa))
     return false;
 
+  for (char &c : isa)
+    c = std::tolower(c);
+
   if (not openUserFiles(args))
     return false; 
 
