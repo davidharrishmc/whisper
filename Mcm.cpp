@@ -3941,8 +3941,8 @@ Mcm<URV>::ppoRule2VecLdIx(Hart<URV>& hart, const McmInstr& instrB) const
   bool ordered = true;
   for (size_t i = 1; i < instrB.memOps_.size() and ordered; ++i)
     {
-      auto& prevOp = sysMemOps_.at(instrB.memOps_.at(i-1));
-      auto& op = sysMemOps_.at(instrB.memOps_.at(i));
+      const auto& prevOp = sysMemOps_.at(instrB.memOps_.at(i-1));
+      const auto& op = sysMemOps_.at(instrB.memOps_.at(i));
       if (op.elemIx_ < prevOp.elemIx_)
         ordered = false;
     }
