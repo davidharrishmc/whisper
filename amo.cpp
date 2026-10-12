@@ -1106,7 +1106,7 @@ template <typename URV>
 void
 Hart<URV>::execAmocas_w(const DecodedInst* di)
 {
-  if (not isRva() or not isRvzacas())
+  if (not isRvZaamo() or not isRvzacas())
     {
       illegalInst(di);
       return;
@@ -1145,7 +1145,7 @@ template <>
 void
 Hart<uint32_t>::execAmocas_d(const DecodedInst* di)
 {
-  if (not isRva() or not isRvzacas())
+  if (not isRvZaamo() or not isRvzacas())
     {
       illegalInst(di);
       return;
@@ -1215,7 +1215,7 @@ template <>
 void
 Hart<uint64_t>::execAmocas_d(const DecodedInst* di)
 {
-  if (not isRva() or not isRvzacas())
+  if (not isRvZaamo() or not isRvzacas())
     {
       illegalInst(di);
       return;
@@ -1261,7 +1261,7 @@ template <>
 void
 Hart<uint64_t>::execAmocas_q(const DecodedInst* di)
 {
-  if (not isRva() or not isRvzacas())
+  if (not isRvZaamo() or not isRvzacas())
     {
       illegalInst(di);
       return;
