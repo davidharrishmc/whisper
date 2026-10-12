@@ -17,6 +17,7 @@ namespace WdRiscv
     Zfh,
     Zfhmin,
     Zlsseg,
+    Zk,
     Zkt,
     Zkn,
     Zks,
