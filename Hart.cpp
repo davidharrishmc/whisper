@@ -865,15 +865,22 @@ Hart<URV>::updateMemoryProtection()
 
   for (unsigned ix = 0; ix < count; ++ix)
     {
+      auto csrn = CsRegs<URV>::advance(CsrNumber::PMPADDR0, ix);
+      auto csr = csRegs_.findCsr(csrn);
+      assert(csr);
+      if (not csr->isImplemented())
+        continue;
+
+      if (csr->getPokeMask() == 0 and csr->getResetValue() == 0)
+        continue;
+
+      ++impCount;
+
       uint64_t low = 0, high = 0;
 
       Pmp pmp;
-      if (unpackMemoryProtection(ix, pmp, low, high))
-        {
-          impCount++;
-          if (pmp.type() != Pmp::Type::Off)
-            pmpMgr_.defineRegion(low, high, pmp, ix);
-        }
+      if (unpackMemoryProtection(ix, pmp, low, high) and pmp.type() != Pmp::Type::Off)
+        pmpMgr_.defineRegion(low, high, pmp, ix);
     }
 
 #ifndef FAST_SLOPPY
@@ -894,7 +901,7 @@ Hart<URV>::unpackMemoryProtection(unsigned entryIx, Pmp& pmp,
   if (entryIx >= 64)
     return false;
 
-  auto csrn = CsrNumber(unsigned(CsrNumber::PMPADDR0) + entryIx);
+  auto csrn = CsRegs<URV>::advance(CsrNumber::PMPADDR0, entryIx);
 
   URV pmpVal = 0;
   if (not peekCsr(csrn, pmpVal))
