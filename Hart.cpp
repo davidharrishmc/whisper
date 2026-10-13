@@ -658,20 +658,6 @@ Hart<URV>::processExtensions(bool verbose)
 		    << "-- ignored\n";
       }
 
-  using enum RvExtension;
-
-  if (isa_.isEnabled(Zk))
-    for (auto ext : { Zkn, Zks, Zkr, Zkt })
-      enableExtension(ext, true);
-
-  if (isa_.isEnabled(Zkn))
-    for (auto ext : { Zbkb, Zbkc, Zbkx, Zkne, Zknd, Zknh })
-      enableExtension(ext, true);
-
-  if (isa_.isEnabled(RvExtension::Zks))
-    for (auto ext : { Zbkb, Zbkc, Zbkx, Zkne, Zksed, Zksh })
-      enableExtension(ext, true);
-
   enableExtension(RvExtension::Zba,      isa_.isEnabled(RvExtension::Zba));
   enableExtension(RvExtension::Zbb,      isa_.isEnabled(RvExtension::Zbb));
   enableExtension(RvExtension::Zbc,      isa_.isEnabled(RvExtension::Zbc));
