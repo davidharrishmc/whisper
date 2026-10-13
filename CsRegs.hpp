@@ -2302,6 +2302,10 @@ namespace WdRiscv
     /// to read-only zero if false.
     void enableZicfilp(bool flag);
 
+    /// Make MSECCFG/MSECCFGH implemented if an extension that adds a field to MSECCFG
+    /// (Smepmp, Zkr, Zicfilp, Smmpm) is enabled and not-implemented otherwise.
+    void updateMseccfg();
+
     /// Enable/disable zicfiss extension. Sets menvcfg/henvcfg/senvcfg.SSE
     /// to read-only zero if false.
     void enableZicfiss(bool flag);
@@ -2982,6 +2986,10 @@ namespace WdRiscv
     bool smcsrindOn_ = false;     // Smcsrind extension (indirect CSR).
     bool zihpmOn_ = false;        // Zihpm extension (performance counters).
     bool zicntrOn_ = false;       // Zicntr extension (counters).
+    bool smepmpOn_ = false;       // Smepmp extension (mseccfg.MML/MMWP/RLB).
+    bool zkrOn_ = false;          // Zkr extension (mseccfg.USEED/SSEED).
+    bool zicfilpOn_ = false;      // Zicfilp extension (mseccfg.MLPE).
+    bool smmpmOn_ = false;        // Smmpm extension (mseccfg.PMM).
     bool smdbltrpOn_ = false;
     bool ssdbltrpOn_ = false;
 
