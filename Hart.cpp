@@ -628,7 +628,8 @@ Hart<URV>::processExtensions(bool verbose)
   if (isa_.isEnabled(RvExtension::M))
     {
       enableExtension(RvExtension::M, flag);
-      enableExtension(RvExtension::Zmmul, flag);
+      // M implies Zmmul. A listed Zmmul stays on when misa.M is cleared.
+      enableExtension(RvExtension::Zmmul, flag or isa_.isEnabled(RvExtension::Zmmul));
     }
   else
     {
