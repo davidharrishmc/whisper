@@ -896,6 +896,20 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         }
     }
 
+  // SEW=8 is always supported and SEW above 64 is reserved.
+  if (bytesPerElem.at(0) != 1)
+    {
+      std::cerr << "Error: Config file min_bytes_per_elem (" << bytesPerElem.at(0)
+                << ") must be 1\n";
+      errors++;
+    }
+  if (bytesPerElem.at(1) > 8)
+    {
+      std::cerr << "Error: Config file max_bytes_per_elem (" << bytesPerElem.at(1)
+                << ") must not be larger than 8\n";
+      errors++;
+    }
+
   std::unordered_map<GroupMultiplier, unsigned> minBytesPerLmul;
   tag = "min_sew_per_lmul";
   if (vconf.contains(tag))
