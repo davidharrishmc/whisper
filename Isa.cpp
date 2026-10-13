@@ -664,6 +664,20 @@ Isa::applyIsaString(std::string_view isaStr)
 	for (RVE subExt : { RVE::Zba, RVE::Zbb, RVE::Zbs } )
 	  enable(subExt, true);
 
+      // Zk is Zkn + Zkr + Zkt, Zkn is Zbkb + Zbkc + Zbkx + Zkne + Zknd + Zknh, and Zks
+      // is Zbkb + Zbkc + Zbkx + Zksed + Zksh.
+      if (ext == RVE::Zk)
+	for (RVE subExt : { RVE::Zkn, RVE::Zkr, RVE::Zkt } )
+	  enable(subExt, true);
+
+      if (ext == RVE::Zk or ext == RVE::Zkn)
+	for (RVE subExt : { RVE::Zbkb, RVE::Zbkc, RVE::Zbkx, RVE::Zkne, RVE::Zknd, RVE::Zknh } )
+	  enable(subExt, true);
+
+      if (ext == RVE::Zks)
+	for (RVE subExt : { RVE::Zbkb, RVE::Zbkc, RVE::Zbkx, RVE::Zksed, RVE::Zksh } )
+	  enable(subExt, true);
+
       if (ext == RVE::Zabha)
 	enable(RVE::Zaamo, true);
 
