@@ -815,6 +815,7 @@ Hart<URV>::processExtensions(bool verbose)
 
   bool zca = isRvc() or isa_.isEnabled(RvExtension::Zca);  // C implies Zca
   enableExtension(RvExtension::Zca, zca);
+  csRegs_.enableRvc(zca);  // IALIGN is 16 with Zca: keep bit 1 of xepc.
 
   if (isa_.isEnabled(RvExtension::Zcd) and not zca)
     std::cerr << "Warning: Zcd extension enabled but pre-requisite Zca extension is not\n";
