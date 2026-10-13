@@ -2220,10 +2220,10 @@ namespace WdRiscv
     /// Enable/disable F extension.
     void enableRvf(bool flag);
 
-    /// Enable/disable C extension.
+    /// Enable/disable compressed instructions (C or Zca), which make IALIGN 16.
     void enableRvc(bool flag)
     {
-      // Least sig bit reads zero if C. Least sig 2 bits read zero if not C.
+      // Least sig bit reads zero if Zca. Least sig 2 bits read zero if not Zca.
       URV mask = ~URV(0) << (flag ? 1 : 2);  // 
       regs_.at(size_t(CsrNumber::MEPC)).setReadMask(mask);
       regs_.at(size_t(CsrNumber::SEPC)).setReadMask(mask);
