@@ -12357,7 +12357,7 @@ Hart<URV>::execSinval_vma(const DecodedInst* di)
 {
   if (not isRvs() or not isRvsvinval() or privMode_ < PrivilegeMode::Supervisor)
    {
-      if (virtMode_ and privMode_ == PrivilegeMode::User)
+      if (virtMode_ and privMode_ == PrivilegeMode::User and isRvsvinval())
 	virtualInst(di);
       else
 	illegalInst(di);
@@ -12373,7 +12373,7 @@ Hart<URV>::execSfence_w_inval(const DecodedInst* di)
 {
   if (not isRvs() or not isRvsvinval() or privMode_ < PrivilegeMode::Supervisor)
     {
-      if (virtMode_ and privMode_ == PrivilegeMode::User)
+      if (virtMode_ and privMode_ == PrivilegeMode::User and isRvsvinval())
 	virtualInst(di);
       else
 	illegalInst(di);
@@ -12388,7 +12388,7 @@ Hart<URV>::execSfence_inval_ir(const DecodedInst* di)
 {
   if (not isRvs() or not isRvsvinval() or privMode_ < PrivilegeMode::Supervisor)
     {
-      if (virtMode_ and privMode_ == PrivilegeMode::User)
+      if (virtMode_ and privMode_ == PrivilegeMode::User and isRvsvinval())
 	virtualInst(di);
       else
 	illegalInst(di);
