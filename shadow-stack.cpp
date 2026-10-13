@@ -174,7 +174,7 @@ template <typename URV>
 void
 Hart<URV>::execSsamoswap_w(const DecodedInst* di)
 {
-  if (not isRva() or not isRvZicfiss())
+  if (not isRvZaamo() or not isRvZicfiss())
     {
       illegalInst(di);
       return;
@@ -244,7 +244,7 @@ template <typename URV>
 void
 Hart<URV>::execSsamoswap_d(const DecodedInst* di)
 {
-  if (not isRva() or not isRvZicfiss() or not isRv64())
+  if (not isRvZaamo() or not isRvZicfiss() or not isRv64())
     {
       illegalInst(di);
       return;
