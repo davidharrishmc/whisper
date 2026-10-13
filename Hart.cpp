@@ -669,8 +669,12 @@ Hart<URV>::processExtensions(bool verbose)
     for (auto ext : { Zbkb, Zbkc, Zbkx, Zkne, Zknd, Zknh })
       enableExtension(ext, true);
 
-  if (isa_.isEnabled(RvExtension::Zks))
+  if (isa_.isEnabled(Zks))
     for (auto ext : { Zbkb, Zbkc, Zbkx, Zkne, Zksed, Zksh })
+      enableExtension(ext, true);
+
+  if (isa_.isEnabled(Zvkn))
+    for (auto ext : { Zvbb, Zvbc, Zvkned, Zvknha, Zvknhb, Zkt })
       enableExtension(ext, true);
 
   enableExtension(RvExtension::Zba,      isa_.isEnabled(RvExtension::Zba));

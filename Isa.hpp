@@ -41,6 +41,7 @@ namespace WdRiscv
     Zvfhmin,
     Zvbb,
     Zvbc,
+    Zvkn,
     Zvkg,
     Zvkned,
     Zvknha,
