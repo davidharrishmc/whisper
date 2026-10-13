@@ -751,8 +751,8 @@ Hart<URV>::processExtensions(bool verbose)
   flag = isa_.isEnabled(RvExtension::Ssijt) and isa_.isEnabled(RvExtension::Ssehv);
   enableExtension(RvExtension::Ssehv,    flag);
 
-  if (isa_.isEnabled(RvExtension::Sstc))
-    enableRvsstc(true);
+  // Without Sstc, MENVCFG.STCE and HENVCFG.STCE are read-only zero.
+  enableRvsstc(isa_.isEnabled(RvExtension::Sstc));
   if (isa_.isEnabled(RvExtension::Svinval))
     enableSvinval(true);
   if (isa_.isEnabled(RvExtension::Svnapot))
