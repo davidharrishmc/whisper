@@ -3411,6 +3411,19 @@ namespace WdRiscv
     void enableBabylonPma(bool flag)
     { bbl_ = flag; pmaMgr_.enableBabylon(flag); }
 
+    /// Return the number of bytes per vector register specified by the Zvl* extensions.
+    /// If more tha one Zvl* extension is present rturn largest numer. If none, return 0.
+    uint32_t isaVecBytesPerReg() const
+    {
+      if (isa_.isEnabled(RvExtension::Zvl1024b)) return 128;
+      if (isa_.isEnabled(RvExtension::Zvl512b))  return 64;
+      if (isa_.isEnabled(RvExtension::Zvl256b))  return 32;
+      if (isa_.isEnabled(RvExtension::Zvl128b))  return 16;
+      if (isa_.isEnabled(RvExtension::Zvl64b))   return 8;
+      if (isa_.isEnabled(RvExtension::Zvl32b))   return 4;
+      return 0;
+    }
+
   protected:
 
     /// Support memory consistency model (MCM) instruction cache. Read 2 bytes from the

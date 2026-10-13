@@ -826,6 +826,7 @@ bool
 applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
 {
   using namespace std::string_view_literals;
+  using std::cerr;
 
   if (not config.contains("vector"))
     return true;  // Nothing to apply
@@ -837,7 +838,7 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
   std::string_view tag = "bytes_per_vec";
   if (not vconf.contains(tag))
     {
-      std::cerr << "Error: Missing " << tag << " tag in vector section of config file\n";
+      cerr << "Error: Missing " << tag << " tag in vector section of config file\n";
       errors++;
     }
   else
@@ -846,16 +847,23 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         errors++;
       else if (bytesPerVec == 0 or bytesPerVec > 4096)
         {
-          std::cerr << "Error: Invalid config file bytes_per_vec number: "
-                    << bytesPerVec << '\n';
+          cerr << "Error: Invalid config file bytes_per_vec number: "
+               << bytesPerVec << '\n';
           errors++;
         }
       else if (not isPowerOf2(bytesPerVec))
 	{
-	  std::cerr << "Error: Config file bytes_per_vec ("
-		    << bytesPerVec << ") is not a power of 2\n";
+	  cerr << "Error: Config file bytes_per_vec ("
+               << bytesPerVec << ") is not a power of 2\n";
 	  errors++;
 	}
+      else if (bytesPerVec < hart.isaVecBytesPerReg())
+        {
+          cerr << "Error: Config file bytes_per_vec (" << bytesPerVec << ") is less"
+               << " that that required by the isa string ("
+               << hart.isaVecBytesPerReg() << ")\n";
+          errors++;
+        }
     }
 
   std::vector<unsigned> bytesPerElem = { 1, 1 };
