@@ -574,10 +574,9 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Zalrsc, isa_.isEnabled(RvExtension::Zalrsc));
 
   // Zabha depends on Zaamo.
-  bool isaZabha = isa_.isEnabled(RvExtension::Zaamo) and isa_.isEnabled(RvExtension::Zaamo);
+  bool isaZabha = isa_.isEnabled(RvExtension::Zabha) and isa_.isEnabled(RvExtension::Zaamo);
   enableExtension(RvExtension::Zabha, isaZabha);
 
-  enableExtension(RvExtension::Zaamo, isaZabha);
   if (isa_.isEnabled(RvExtension::A))
     {
       enableExtension(RvExtension::A, flag);
