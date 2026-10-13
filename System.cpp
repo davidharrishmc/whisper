@@ -862,10 +862,8 @@ System<URV>::configImsic(uint64_t mbase, uint64_t mstride,
   ok = imsicMgr_.configureSupervisor(sbase, sstride, idsVec.at(1), tmVec.at(1), saplic) and ok;
   ok = imsicMgr_.configureGuests(guests, idsVec.at(2), tmVec.at(2)) and ok;
 
-  // Unless guest_interrupt_count sets it, a hart's GEILEN is its number of guest interrupt files.
-  for (auto& hart : sysHarts_)
-    if (hart->guestInterruptCount() == 0)
-      hart->configGuestInterruptCount(guests);
+  // Note: The GEILEN fallback to the number of guest interrupt files is done in
+  // HartConfig::applyConfig since the HGEIE/HGEIP masks must be known before configIsa.
   if (not ok)
     {
       cerr << "Error: Failed to configure IMSIC.\n";

@@ -2602,6 +2602,17 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose,
       else
         errors++;
     }
+  else if (config_ -> contains("imsic") and config_ -> at("imsic").contains("guests"))
+    {
+      // Unless guest_interrupt_count sets it, a hart's GEILEN is its number of guest
+      // interrupt files. This must be done here (before configIsa/setDefaultMasks) because
+      // the HGEIE/HGEIP masks are derived from GEILEN and are not changed afterwards.
+      uint64_t guests = 0;
+      if (getJsonUnsigned<uint64_t>("imsic.guests", config_ -> at("imsic").at("guests"), guests))
+        hart.configGuestInterruptCount(guests);
+      else
+        errors++;
+    }
 
   tag = "coherent_icache";
   if (config_ -> contains(tag))
