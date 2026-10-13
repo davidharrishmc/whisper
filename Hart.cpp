@@ -12476,7 +12476,7 @@ namespace WdRiscv
     // 1.6b. Ssdbltrp: MRET to U-mode (or VS/VU in H-mode) clears sstatus.SDT.
     // Spec supervisor.adoc: "When MRET or SRET are executed in M-mode and the
     // new privilege mode is U, VS, or VU, sstatus.SDT is also set to 0."
-    if (isRvssdbltrp() and savedMode < PrivilegeMode::Supervisor)
+    if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
       fields.bits_.SDT = 0;
 
     // 1.7. Write back MSTATUS.
@@ -12565,6 +12565,10 @@ namespace WdRiscv
     // For RV32, MDT is bit 10 of mstatush (bit 42 overall = 42 - 32 = 10).
     if (isRvsmdbltrp())
       hvalue &= ~ uint32_t(1 << 10);
+
+    // 1.6b. Ssdbltrp: MRET to U, VS, or VU clears sstatus.SDT (machine.html line 1409-1411).
+    if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
+      fields.bits_.SDT = 0;
 
     // 1.7. Write back MSTATUS.
     if (not csRegs_.write(CsrNumber::MSTATUS, privMode_, fields.value_))
@@ -12780,6 +12784,13 @@ Hart<URV>::execMnret(const DecodedInst* di)
       if (isRvsmdbltrp() and mstatus_.bits_.MDT)
 	{
 	  mstatus_.bits_.MDT = 0;
+	  needWrite = true;
+	}
+      // Ssdbltrp: MNRET to U, VS, or VU sets sstatus.SDT to 0 (same lines).
+      if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt) and
+	  mstatus_.bits_.SDT)
+	{
+	  mstatus_.bits_.SDT = 0;
 	  needWrite = true;
 	}
       if (mstatus_.bits_.MPRV != 0)
