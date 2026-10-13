@@ -15003,7 +15003,9 @@ Hart<URV>::execMop_r(const DecodedInst* di)
       return;
     }
 
-  if (isShadowStackEnabled(privMode_, virtMode_))
+  // Only mop.r.28 encodes shadow stack instructions (sspopchk, ssrdp).
+  bool mopR28 = (di->inst() >> 20) == 0xcdc;
+  if (mopR28 and isShadowStackEnabled(privMode_, virtMode_))
     {
       if (di->op0() == 0 and (di->op1() == 1 or di->op1() == 5))
         {
@@ -15032,7 +15034,9 @@ Hart<URV>::execMop_rr(const DecodedInst* di)
       return;
     }
 
-  if (isShadowStackEnabled(privMode_, virtMode_))
+  // Only mop.rr.7 encodes a shadow stack instruction (sspush).
+  bool mopRr7 = (di->inst() >> 25) == 0x67;
+  if (mopRr7 and isShadowStackEnabled(privMode_, virtMode_))
     {
       // SSPUSH is encoded as mop_rr with rd=x0, rs1=x0, rs2 in {x1,x5}.
       // Use rs2 (op2) as the pushed register source.
