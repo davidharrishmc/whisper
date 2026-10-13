@@ -2576,9 +2576,8 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
   if (config_ -> contains(tag))
     {
       uint64_t size = 0;
-      if (getJsonUnsigned<uint64_t>(tag, config_ -> at(tag), size))
-        hart.configMemoryProtectionGrain(size);
-      else
+      if (not getJsonUnsigned<uint64_t>(tag, config_ -> at(tag), size) or
+          not hart.configMemoryProtectionGrain(size))
         errors++;
     }
 
