@@ -393,6 +393,11 @@ applyCsrConfig(Hart<URV>& hart, std::string_view nm, const nlohmann::json& conf,
       return false;
     }
 
+  // Remember an explicit "exists": true: it keeps an optional CSR (e.g. mcounteren
+  // without U-mode) that would otherwise not be implemented.
+  if (conf.contains("exists") and exists)
+    csr->setUserEnabled(true);
+
   if (conf.contains("privilege_mode"))
     {
       std::string val = conf.at("privilege_mode").get<std::string>();
