@@ -2898,6 +2898,20 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
 	      atmErrors++;
 	      continue;
 	    }
+	  using VM = VirtMem::Mode;
+	  bool legal = mode == VM::Bare;
+	  if constexpr (sizeof(URV) == 4)
+	    legal = legal or mode == VM::Sv32;
+	  else
+	    legal = legal or mode == VM::Sv39 or mode == VM::Sv48 or mode == VM::Sv57;
+	  if (not legal)
+	    {
+              if (hart0)
+                cerr << "Error: Address translation mode " << modeStr << " in config file "
+                     << tag << " is not supported for XLEN=" << sizeof(URV)*8 << '\n';
+	      atmErrors++;
+	      continue;
+	    }
 	  modes.push_back(mode);
 	}
       if (std::find(modes.begin(), modes.end(), VirtMem::Mode::Bare) == modes.end())
@@ -2905,6 +2919,24 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
           if (hart0)
             cerr << "Warning: Bare mode missing in config file address_translation_modes -- adding it\n";
 	  modes.push_back(VirtMem::Mode::Bare);
+	}
+      auto has = [&modes](VirtMem::Mode m) {
+        return std::find(modes.begin(), modes.end(), m) != modes.end();
+      };
+      // Sv48 requires Sv39 and Sv57 requires Sv48.
+      if (has(VirtMem::Mode::Sv48) and not has(VirtMem::Mode::Sv39))
+	{
+          if (hart0)
+            cerr << "Error: Address translation mode sv48 in config file " << tag
+                 << " requires sv39\n";
+	  atmErrors++;
+	}
+      if (has(VirtMem::Mode::Sv57) and not has(VirtMem::Mode::Sv48))
+	{
+          if (hart0)
+            cerr << "Error: Address translation mode sv57 in config file " << tag
+                 << " requires sv48\n";
+	  atmErrors++;
 	}
       if (not atmErrors)
 	hart.configAddressTranslationModes(modes);

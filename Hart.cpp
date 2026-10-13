@@ -5270,6 +5270,18 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
 	return false;
     }
 
+  // The hypervisor extension requires Sv32 on RV32 and at least Sv39 on RV64.
+  if (isa_.isEnabled(RvExtension::H))
+    {
+      auto mode = rv64_ ? VirtMem::Mode::Sv39 : VirtMem::Mode::Sv32;
+      if (not virtMem_.isModeSupported(mode))
+	{
+	  std::cerr << "Error: Extension H requires address translation mode "
+		    << (rv64_ ? "sv39" : "sv32") << '\n';
+	  return false;
+	}
+    }
+
   // Change the default values of the poke (implemened bits) and write masks of the CSRs
   // based on the extensions in the isa string. The masks may later be changed by the CSR
   // configurations in the user config file (e.g. whisper.json).
