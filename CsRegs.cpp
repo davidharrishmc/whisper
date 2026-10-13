@@ -2979,10 +2979,9 @@ CsRegs<URV>::legalizeMstatus(URV value) const
 
   if constexpr (sizeof(URV) == 8)
     {
-      if (fields.bits_.SXL != 2)
-        fields.bits_.SXL = 2;
-      if (fields.bits_.UXL != 2)
-        fields.bits_.UXL = 2;
+      // SXL/UXL are read-only zero if S/U is not implemented.
+      fields.bits_.SXL = superEnabled_ ? 2 : 0;
+      fields.bits_.UXL = userEnabled_ ? 2 : 0;
     }
 
   return fields.value_;
@@ -9108,6 +9107,14 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       mask = mstatus.getPokeMask();
       mask = zicfilp ? (mask | mpelp) : (mask & ~mpelp);
       mstatus.setPokeMask(mask);
+
+      // MSTATUS.SXL/UXL are read-only zero if S/U is not implemented.
+      MstatusFields<URV> mf{mstatus.getResetValue()};
+      if (not isa.isEnabled(RVE::S))
+        mf.bits_.SXL = 0;
+      if (not isa.isEnabled(RVE::U))
+        mf.bits_.UXL = 0;
+      mstatus.setInitialValue(mf.value_);
     }
 
   // MSTATUS.SDT (bit 24 in both rv32 and rv64) pokeable or read-only-zero depending on
