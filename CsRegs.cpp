@@ -9023,6 +9023,28 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
     }
 
   bool super = isa.isEnabled(RVE::S);
+  bool user = isa.isEnabled(RVE::U);
+
+  // MSTATUS fields of S-mode, U-mode, and the vector extension are read-only zero if
+  // those are not implemented (machine.adoc §mstatus).
+  {
+    MstatusFields<URV> roz{0};
+    if (not super)
+      {
+        roz.bits_.SIE = roz.bits_.SPIE = roz.bits_.SPP = 1;
+        roz.bits_.SUM = roz.bits_.MXR = roz.bits_.TVM = roz.bits_.TSR = 1;
+      }
+    if (not user)
+      roz.bits_.MPRV = 1;
+    if (not super and not user)
+      roz.bits_.TW = 1;
+    if (not super and not isa.isEnabled(RVE::V))
+      roz.bits_.VS = 3;
+    auto& mstatus = regs_.at(size_t(CN::MSTATUS));
+    mstatus.setWriteMask(mstatus.getWriteMask() & ~roz.value_);
+    mstatus.setPokeMask(mstatus.getPokeMask() & ~roz.value_);
+  }
+
   // SBE (bit 4 of MSTATUSH in RV32) is read-only zero
   if (rv32_)
     {
