@@ -5270,6 +5270,14 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
 	return false;
     }
 
+  // Za64rs: reservation sets are at most 64 bytes.
+  if (isa_.isEnabled(RvExtension::Za64rs) and lrResSize_ > 64)
+    {
+      std::cerr << "Error: Config file reservation_bytes (" << lrResSize_
+		<< ") must not be larger than 64 with extension Za64rs\n";
+      return false;
+    }
+
   // Change the default values of the poke (implemened bits) and write masks of the CSRs
   // based on the extensions in the isa string. The masks may later be changed by the CSR
   // configurations in the user config file (e.g. whisper.json).
