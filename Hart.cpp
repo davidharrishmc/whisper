@@ -5237,7 +5237,8 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
       if (not csr)
 	return false;
 
-      URV misaReset = 0;
+      // MXL is 1 for RV32 and 2 for RV64.
+      URV misaReset = URV(sizeof(URV) == 4 ? 1 : 2) << (sizeof(URV)*8 - 2);
       if (isa_.isEnabled(RvExtension::A))
 	misaReset |= URV(1);
       if (isa_.isEnabled(RvExtension::B))
