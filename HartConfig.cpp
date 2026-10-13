@@ -2222,7 +2222,8 @@ HartConfig::applyFrameBufferConfig(System<URV>& system) const
 
 template<typename URV>
 bool
-HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
+HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose,
+                        std::string_view effectiveIsa) const
 {
   using std::cerr;
   unsigned errors = 0;
@@ -2393,9 +2394,11 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
 	cerr << "Warning: Config file tag \"" << etag << "\" is no longer supported.\n";
     }
 
-  // Counter overflow: sscofpmf extension
-  std::string isa;
-  bool cof = getIsa(isa) and isa.find("sscofpmf") != std::string::npos;
+  // Counter overflow: sscofpmf extension. Use the isa in effect if given.
+  std::string isa{effectiveIsa};
+  if (isa.empty())
+    getIsa(isa);
+  bool cof = isa.find("sscofpmf") != std::string::npos;
 
   tag = "enable_counter_overflow";
   if (config_ ->contains(tag))
@@ -3480,7 +3483,8 @@ HartConfig::applyPciConfig(System<URV>& system) const
 
 template<typename URV>
 bool
-HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose) const
+HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose,
+                        std::string_view isa) const
 {
   userMode = userMode or this->userModeEnabled();
 
@@ -3488,7 +3492,7 @@ HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose) const
   for (unsigned i = 0; i < system.hartCount(); ++i)
     {
       Hart<URV>& hart = *system.ithHart(i);
-      if (not applyConfig(hart, userMode, verbose))
+      if (not applyConfig(hart, userMode, verbose, isa))
 	return false;
 
       if (not applyClintConfig(system, hart))
@@ -3954,16 +3958,16 @@ HartConfig::hasCsrConfig(std::string_view csrName) const
 // Instantiate tempate member functions
 
 template bool
-HartConfig::applyConfig<uint32_t>(Hart<uint32_t>&, bool, bool) const;
+HartConfig::applyConfig<uint32_t>(Hart<uint32_t>&, bool, bool, std::string_view) const;
 
 template bool
-HartConfig::applyConfig<uint64_t>(Hart<uint64_t>&, bool, bool) const;
+HartConfig::applyConfig<uint64_t>(Hart<uint64_t>&, bool, bool, std::string_view) const;
 
 template bool
-HartConfig::configHarts<uint32_t>(System<uint32_t>&, bool, bool) const;
+HartConfig::configHarts<uint32_t>(System<uint32_t>&, bool, bool, std::string_view) const;
 
 template bool
-HartConfig::configHarts<uint64_t>(System<uint64_t>&, bool, bool) const;
+HartConfig::configHarts<uint64_t>(System<uint64_t>&, bool, bool, std::string_view) const;
 
 template bool
 HartConfig::configMemory(System<uint32_t>&, bool) const;
