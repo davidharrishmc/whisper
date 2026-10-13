@@ -5351,6 +5351,7 @@ bool
 Hart<URV>::configGuestInterruptCount(unsigned n)
 {
   csRegs_.setGuestInterruptCount(n);
+  csRegs_.updateGuestInterruptMasks();
   return true;
 }
 

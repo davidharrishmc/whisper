@@ -8982,6 +8982,27 @@ CsRegs<URV>::isImsicSelectStrict(URV sel) const
 
 template <typename URV>
 void
+CsRegs<URV>::updateGuestInterruptMasks()
+{
+  using CN = CsrNumber;
+
+  // Only bits GEILEN:1 of HGEIE and HGEIP are implemented.
+  unsigned xlen = sizeof(URV) * 8;
+  unsigned geilen = geilen_ < xlen ? geilen_ : xlen - 1;
+  URV mask = geilen ? (~URV(0) >> (xlen - 1 - geilen)) & ~URV(1) : 0;
+
+  auto& hgeie = regs_.at(size_t(CN::HGEIE));
+  hgeie.setWriteMask(mask);
+  hgeie.setPokeMask(mask);
+
+  auto& hgeip = regs_.at(size_t(CN::HGEIP));
+  hgeip.setWriteMask(0);
+  hgeip.setPokeMask(mask);
+}
+
+
+template <typename URV>
+void
 CsRegs<URV>::setDefaultMasks(const Isa& isa)
 {
   using RVE = RvExtension;
@@ -9180,18 +9201,7 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
     }
 
   // Configure guest interrupts in HGEIE and HGEIP
-  // Only bits GEILEN:1 of HGEIE and HGEIP are implemented.
-  unsigned xlen = sizeof(URV) * 8;
-  unsigned geilen = geilen_ < xlen ? geilen_ : xlen - 1;
-  mask = geilen ? (~URV(0) >> (xlen - 1 - geilen)) & ~URV(1) : 0;
-
-  auto& hgeie = regs_.at(size_t(CN::HGEIE));
-  hgeie.setWriteMask(mask);
-  hgeie.setPokeMask(mask);
-
-  auto& hgeip = regs_.at(size_t(CN::HGEIP));
-  hgeip.setWriteMask(0);
-  hgeip.setPokeMask(mask);
+  updateGuestInterruptMasks();
 
   auto& mstatus = regs_.at(size_t(CN::MSTATUS));
   bool mSpelp = MstatusFields<URV>(mstatus.getPokeMask()).bits_.SPELP;
