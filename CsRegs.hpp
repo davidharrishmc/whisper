@@ -2272,6 +2272,10 @@ namespace WdRiscv
     /// current value of MENVCFG.DTE.
     void enableSdt(bool flag);
 
+    /// Make VSSTATUS.SDT writable if Ssdbltrp and H are enabled and HENVCFG.DTE is set;
+    /// otherwise, make it read-only-zero.
+    void updateVsstatusSdt();
+
     /// Enable/disable vector extension.
     void enableVector(bool flag);
 
