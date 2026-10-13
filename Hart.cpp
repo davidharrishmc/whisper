@@ -1114,17 +1114,22 @@ Hart<URV>::resetVector()
   if (isRvv())
     {
       bool configured = vecRegs_.registerCount() > 0;
-      if (not configured) {
-        constexpr uint32_t bytesPerReg = std::is_same<URV, uint32_t>::value ? 32 : 64;
-        constexpr uint32_t maxBytesPerElem = std::is_same<URV, uint32_t>::value ? 4 : 8;
-        vecRegs_.config(
-            bytesPerReg,
-            1 /*minBytesPerElem*/,
-            maxBytesPerElem,
-            nullptr /*minSewPerLmul*/,
-            nullptr /*maxSewPerLmul*/
-        );
-      }
+      if (not configured)
+        {
+          uint32_t bytesPerReg = isaVecBytesPerReg();
+
+          if (bytesPerReg == 0)
+            bytesPerReg = std::is_same<URV, uint32_t>::value ? 32 : 64;
+
+          constexpr uint32_t maxBytesPerElem = std::is_same<URV, uint32_t>::value ? 4 : 8;
+          vecRegs_.config(
+                          bytesPerReg,
+                          1 /*minBytesPerElem*/,
+                          maxBytesPerElem,
+                          nullptr /*minSewPerLmul*/,
+                          nullptr /*maxSewPerLmul*/
+                          );
+        }
       unsigned bytesPerReg = vecRegs_.bytesPerRegister();
       csRegs_.configCsr(CsrNumber::VLENB, true, bytesPerReg, 0, 0);
       auto vstartBits = uint32_t(std::bit_width(bytesPerReg*8) - 1);  // Log2(bytesPerReg*8)
