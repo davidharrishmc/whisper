@@ -1517,7 +1517,7 @@ namespace WdRiscv
 
     /// Enable/disable the c (compressed) extension.
     void enableRvc(bool flag)
-    { enableExtension(RvExtension::C, flag); csRegs_.enableRvc(flag); }
+    { enableExtension(RvExtension::C, flag); }
 
     /// Enable/disable the f (floating point) extension.
     void enableRvf(bool flag);
