@@ -8696,7 +8696,7 @@ CsRegs<URV>::isStateEnabled(CsrNumber num, PrivilegeMode pm, bool vm) const
 
   // Determine controlling *STATEEN* CSR number.
   CN ccsrn = CN::MSTATEEN0, ccsrnh = CN::MSTATEEN0H;
-  if (pm == PrivilegeMode::User)
+  if (pm == PrivilegeMode::User and superEnabled_)  // Without S, mstateen controls U.
     ccsrn = CN::SSTATEEN0;
   else if (vm)
     {
