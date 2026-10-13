@@ -3667,7 +3667,11 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
   // Must be done before writing S-mode EPC/CAUSE/TVAL registers.
   if (isRvssdbltrp() and nextMode == PM::Supervisor and not nextVirt and mstatus_.bits_.SDT)
     {
+      // mtval2 gets what the unexpected trap would have written to mcause, including
+      // the interrupt bit (supervisor.adoc "Double Trap Control in sstatus Register").
       URV origCause = cause;
+      if (interrupt)
+        origCause |= URV(1) << (mxlen_ - 1);
 
       // Build M-mode trap state inline (same pattern as aclicSaveContext Ssdbltrp path).
       mstatus_.bits_.MPP  = unsigned(origMode);
@@ -3684,7 +3688,9 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
       if (not csRegs_.write(CsrNumber::MCAUSE, PM::Machine, URV(EC2::DOUBLE_TRAP)))
         assert(0 and "Failed to write MCAUSE in Ssdbltrp double-trap escalation");
 
-      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, 0))
+      // mtval gets the unexpected trap's tval, as if it were taken into M-mode.
+      URV tval = (clearMtvalOnEgs_ and egsConstraint_) ? 0 : info;
+      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, tval))
         assert(0 and "Failed to write MTVAL in Ssdbltrp double-trap escalation");
 
       pokeCsr(CsrNumber::MTVAL2, origCause);  // original cause → mtval2
@@ -4226,8 +4232,8 @@ Hart<URV>::aclicSaveContext(PrivilegeMode origMode, PrivilegeMode nextMode, URV 
       // it was already enabled via enableHypervisorMode. Either way it works.
       pokeCsr(CsrNumber::MTVAL2, URV(cause));  // best-effort; not fatal if absent
 
-      // mtval = 0 (no specific address for double-trap at context save)
-      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, 0))
+      // mtval = faulting address of the context push, as the non-escalated path reports it.
+      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, ldStFaultAddr_))
         assert(0 and "Failed to write MTVAL in Ssdbltrp escalation");
 
       // switch to M-mode and redirect to mtvec
