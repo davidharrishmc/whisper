@@ -2552,13 +2552,15 @@ CsRegs<URV>::updateStateenMasks()
     }
 
   // Bit 63 (SE) of mstateen1-3 may be read-only zero only if the hypervisor extension is
-  // not implemented. Bit 63 of each hstateen is always writable.
+  // not implemented; otherwise, it must be writeable. Bit 63 of each hstateen is always
+  // writable.
   URV se = URV(1) << (8*sizeof(URV) - 1);  // Bit 63 (bit 31 of high CSR in rv32).
   for (unsigned ix = 1; ix <= 3; ++ix)
     {
-      CN mnum = advance(rv32_ ? CN::MSTATEEN0H : CN::MSTATEEN0, ix);
+      // CN mnum = advance(rv32_ ? CN::MSTATEEN0H : CN::MSTATEEN0, ix);
+      // update(mnum, se, hyperEnabled_ ? se : 0);
+
       CN hnum = advance(rv32_ ? CN::HSTATEEN0H : CN::HSTATEEN0, ix);
-      update(mnum, se, hyperEnabled_ ? se : 0);
       update(hnum, se, se);
     }
 }
