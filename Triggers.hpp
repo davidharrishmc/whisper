@@ -939,7 +939,7 @@ namespace WdRiscv
     URV data1WriteMask_   = ~URV(0);
     URV data2WriteMask_   = ~URV(0);
     URV data3WriteMask_   = 0;              // Place holder.
-    URV infoWriteMask_    = ~URV(0);
+    URV infoWriteMask_    = 0;              // Fields of tinfo are read-only.
 
     URV data1PokeMask_   = ~URV(0);
     URV data2PokeMask_   = ~URV(0);
