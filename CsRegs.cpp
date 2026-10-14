@@ -2499,7 +2499,7 @@ CsRegs<URV>::updateStateenMasks()
       mbits.bits_.SRMCFG = ssqosidOn_;
       mbits.bits_.P1P13 = rv32_ and hyperEnabled_;  // HEDELEGH exists only in RV32.
       mbits.bits_.CONTEXT = sdtrigOn_;
-      mbits.bits_.IMSIC = aiaEnabled_;
+      mbits.bits_.IMSIC = aiaEnabled_ and imsic_;  // Read-only zero without an IMSIC.
       mbits.bits_.AIA = aiaEnabled_;
       mbits.bits_.CSRIND = aiaEnabled_ or sscsrindOn_;
       mbits.bits_.ENVCFG = 1;

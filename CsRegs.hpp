@@ -1056,7 +1056,10 @@ namespace WdRiscv
 
     /// Associate an IMSIC with this register file.
     void attachImsic(std::shared_ptr<TT_IMSIC::Imsic> imsic)
-    { imsic_ = std::move(imsic); }
+    {
+      imsic_ = std::move(imsic);
+      updateStateenMasks();  // IMSIC bit of mstateen0/hstateen0 depends on imsic_.
+    }
 
     /// Associate an ACLIC with this register file.
     void attachAclic(std::shared_ptr<TT_ACLIC::Aclic> aclic)
