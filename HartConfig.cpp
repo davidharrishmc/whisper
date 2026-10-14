@@ -640,6 +640,14 @@ applyPerfEventMap(Hart<URV>& hart, const nlohmann::json& config)
 	  continue;
 	}
 
+      if (value == 0 and eventId != EventNumber::None)
+	{
+	  std::cerr << "Error: Event number 0 (no event) cannot be associated with event "
+		    << eventName << " in mmode_perf_event_map in config file.\n";
+	  errors++;
+	  continue;
+	}
+
       if (eventNumbers.contains(value))
 	{
 	  std::cerr << "Error: Event number " << value << " associaged with more than one event in mmode_perf_event_map in config file.\n";
