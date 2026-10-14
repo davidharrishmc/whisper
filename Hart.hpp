@@ -491,6 +491,12 @@ namespace WdRiscv
     void enableMtip(bool flag)
     { mtipEnabled_ = flag; markTimerStale(); }
 
+    /// Enable delivery of STIP interrupt from the stimecmp comparator (Sstc).
+    /// Test-bench will disable this and poke MIP.STIP to deliver supervisor
+    /// timer interrupts.
+    void enableStip(bool flag)
+    { stipEnabled_ = flag; markTimerStale(); }
+
     /// Enable support for ebreak semi-hosting.  See ebreak documentation in the
     /// unprivileged spec.
     void enableSemihosting(bool flag)
@@ -7004,6 +7010,7 @@ namespace WdRiscv
     bool mipPoked_ = false;          // Prevent MIP pokes from being clobbered by CLINT.
     bool seiPin_ = false;            // Supervisor external interrupt pin value.
     bool mtipEnabled_ = true;
+    bool stipEnabled_ = true;
     unsigned mxlen_ = 8*sizeof(URV);
     util::file::SharedFile consoleOut_ = nullptr;
 

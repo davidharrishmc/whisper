@@ -999,6 +999,12 @@ The advanced core local interrupt controller (aclint) configuration is an object
 When set to false, disable delivery of the MTIP interrupts (bit 7 in MIP). Default is true.
 This is useful to the test-bench which delivers such interrupts by poking MIP.MTIP.
 
+###  enable_stip
+When set to false, the stimecmp comparator (Sstc) no longer sets or clears the STIP
+interrupt (bit 5 in MIP). Default is true. The stimecmp CSR remains implemented and
+writable, and menvcfg.STCE still makes MIP.STIP read-only to software writes. This is
+useful to the test-bench which delivers such interrupts by poking MIP.STIP.
+
 ###  reset_vec
 Defines the program counter (PC) value after reset. The ELF file
 entry point will supersede the reset_vec value unless --raw is

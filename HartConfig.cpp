@@ -3231,6 +3231,14 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose,
       hart.enableMtip(flag);
     }
 
+  tag = "enable_stip";
+  if (config_->contains(tag))
+    {
+      bool flag = false;
+      getJsonBoolean(tag, config_->at(tag), flag) or errors++;
+      hart.enableStip(flag);
+    }
+
   return errors == 0;
 }
 
