@@ -1202,6 +1202,9 @@ namespace WdRiscv
 
   protected:
 
+    // Configure guest interrupts in HGEIE and HGEIP
+    void updateGuestInterruptMasks();
+
     /// Advance a csr number by the given amount (add amount to number).
     static CsrNumber advance(CsrNumber csrn, uint32_t amount)
     { return CsrNumber(uint32_t(csrn) + amount); }
