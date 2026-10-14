@@ -401,7 +401,7 @@ applyCsrConfig(Hart<URV>& hart, std::string_view nm, const nlohmann::json& conf,
         pm = PrivilegeMode::Machine;
       else if (val == "s" or val == "supervisor")
         pm = PrivilegeMode::Supervisor;
-      else if (val == "s" or val == "user")
+      else if (val == "u" or val == "user")
         pm = PrivilegeMode::User;
       else
         {
@@ -3489,10 +3489,13 @@ HartConfig::applyImsicConfig(System<URV>& system) const
 	      return false;
 	    }
 	}
-      unsigned tm = 0;
-      if (not getJsonUnsigned("imsic.eithreshold_mask", imsic.at(tag), tm))
-	return false;
-      std::fill(tmVec.begin(), tmVec.end(), tm);
+      else
+	{
+	  unsigned tm = 0;
+	  if (not getJsonUnsigned("imsic.eithreshold_mask", imsic.at(tag), tm))
+	    return false;
+	  std::fill(tmVec.begin(), tmVec.end(), tm);
+	}
     }
 
   bool maplic = false;    // Machine file supports aplic
