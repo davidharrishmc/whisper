@@ -7470,7 +7470,7 @@ Hart<URV>::processTimerInterrupt()
     }
 
   // Deliver/clear supervisor timer from stimecmp CSR.
-  if (stimecmpActive_)
+  if (stimecmpActive_ and stipEnabled_)
     {
       if (time_ >= stimecmp_)
         mipVal = mipVal | (URV(1) << URV(IC::S_TIMER));
@@ -7517,7 +7517,7 @@ Hart<URV>::processTimerInterrupt()
       else if (alarmLimit_ != ~uint64_t(0) and alarmLimit_ > time_)
         deadline = std::min(deadline, alarmLimit_);
     }
-  if (stimecmpActive_ and stimecmp_ > time_)
+  if (stimecmpActive_ and stipEnabled_ and stimecmp_ > time_)
     deadline = std::min(deadline, stimecmp_);
   nextTimerDeadline_ = deadline;
   timerStateStale_ = false;
