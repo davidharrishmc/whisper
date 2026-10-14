@@ -2672,6 +2672,9 @@ CsRegs<URV>::enableSmmpm(bool flag)
 {
   using CN = CsrNumber;
 
+  smmpmOn_ = flag;
+  updateMseccfg();
+
   if constexpr (sizeof(URV) == 8)
     {
       uint8_t mask = flag? 0x3 : 0;
@@ -2753,6 +2756,24 @@ CsRegs<URV>::enableZkr(bool flag)
   mf.bits_.USEED = flag and userEnabled_;
   mf.bits_.SSEED = flag and superEnabled_;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
+
+  zkrOn_ = flag;
+  updateMseccfg();
+}
+
+
+template <typename URV>
+void
+CsRegs<URV>::updateMseccfg()
+{
+  using CN = CsrNumber;
+
+  // MSECCFG exists if any extension that adds a field to it is implemented. Otherwise,
+  // it is reserved.
+  bool exists = smepmpOn_ or zkrOn_ or zicfilpOn_ or smmpmOn_;
+  regs_.at(size_t(CN::MSECCFG)).setImplemented(exists);
+  if (rv32_)
+    regs_.at(size_t(CN::MSECCFGH)).setImplemented(exists);
 }
 
 
@@ -2769,6 +2790,9 @@ CsRegs<URV>::enableSmepmp(bool flag)
   mf.bits_.MMWP = flag;
   mf.bits_.RLB = flag;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
+
+  smepmpOn_ = flag;
+  updateMseccfg();
 }
 
 
@@ -2821,6 +2845,8 @@ CsRegs<URV>::enableZicfilp(bool flag)
   MseccfgFields<URV> mf{regs_.at(size_t(CN::MSECCFG)).getReadMask()};
   mf.bits_.MLPE = flag;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
+  zicfilpOn_ = flag;
+  updateMseccfg();
 
   MenvcfgFields<URV> env{regs_.at(size_t(CN::MENVCFG)).getReadMask()};
   env.bits_.LPE = flag;
