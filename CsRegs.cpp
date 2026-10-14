@@ -1703,6 +1703,42 @@ CsRegs<URV>::readSignExtend(CsrNumber number, PrivilegeMode mode, URV& value) co
 
 template <typename URV>
 void
+CsRegs<URV>::enableUserMode(bool flag)
+{
+  userEnabled_ = flag;
+
+  using CN = CsrNumber;
+
+  // With U-mode, MCOUNTEREN and MENVCFG (and MENVCFGH in RV32) must be implemented.
+  // Without U-mode, MENVCFG/MENVCFGH do not exist and MCOUNTEREN should not exist:
+  // MCOUNTEREN is kept only if the configuration file marks it as existing.
+  for (auto csrn : { CN::MCOUNTEREN, CN::MENVCFG, CN::MENVCFGH })
+    {
+      if (csrn == CN::MENVCFGH and not rv32_)
+        continue;
+      auto csr = findCsr(csrn);
+      bool keep = csrn == CN::MCOUNTEREN and csr->isUserEnabled();
+      if (flag and csr->isUserDisabled())
+        {
+          std::cerr << "Warning: CSR " << csr->getName() << " must be implemented "
+                    << "when U-mode is -- ignoring configuration that disables it\n";
+          csr->setUserDisabled(false);
+        }
+      else if (not flag and not keep and csr->isUserEnabled())
+        {
+          std::cerr << "Warning: CSR " << csr->getName() << " does not exist "
+                    << "without U-mode -- ignoring configuration that enables it\n";
+          csr->setUserEnabled(false);
+        }
+      csr->setImplemented(flag or keep);
+    }
+
+  updateSstc();  // To activate/deactivate STIMECMP (depends on MCOUNTEREN).
+}
+
+
+template <typename URV>
+void
 CsRegs<URV>::enableSupervisorMode(bool flag)
 {
   superEnabled_ = flag;
