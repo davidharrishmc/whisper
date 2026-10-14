@@ -407,6 +407,10 @@
             "$ref": "#/definitions/bool_or_bool_string",
             "description": "When true, the timer interrupt pending bit is controlled by the timer."
         },
+        "enable_stip": {
+            "$ref": "#/definitions/bool_or_bool_string",
+            "description": "When true, the supervisor timer interrupt pending bit (MIP.STIP) is controlled by the stimecmp comparator (Sstc). Defaults to true."
+        },
         "enable_pbmt": {
             "$ref": "#/definitions/bool_or_bool_string",
             "deprecated": true,

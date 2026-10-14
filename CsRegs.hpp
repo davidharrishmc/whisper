@@ -597,6 +597,10 @@ namespace WdRiscv
     bool isImplemented() const
     { return implemented_ and not userDisabled_; }
 
+    /// Mark register as explicitly enabled ("exists": true) by user configuration.
+    void setUserEnabled(bool flag)
+    { userEnabled_ = flag; }
+
     /// Return true if register is mandatory (not optional).
     bool isMandatory() const
     { return mandatory_; }
@@ -824,6 +828,14 @@ namespace WdRiscv
     void setUserDisabled(bool flag)
     { userDisabled_ = flag; }
 
+    /// Return true if register is disabled by user configuration.
+    bool isUserDisabled() const
+    { return userDisabled_; }
+
+    /// Return true if register is explicitly enabled by user configuration.
+    bool isUserEnabled() const
+    { return userEnabled_; }
+
     /// Set initial value.
     void setInitialValue(URV v)
     { initialValue_ = v; }
@@ -936,6 +948,7 @@ namespace WdRiscv
     bool mandatory_ = false;     // True if mandated by architecture.
     bool implemented_ = false;   // True if register is implemented.
     bool userDisabled_ = false;  // True if disabled by user in config file.
+    bool userEnabled_ = false;   // True if marked as existing by user in config file.
     bool hyper_ = false;         // True if hypervisor CSR.
     bool mapsToVirtual_ = false; // True if CSR maps to a virtual supervisor CSR.
     bool defined_ = false;
@@ -1056,7 +1069,10 @@ namespace WdRiscv
 
     /// Associate an IMSIC with this register file.
     void attachImsic(std::shared_ptr<TT_IMSIC::Imsic> imsic)
-    { imsic_ = std::move(imsic); }
+    {
+      imsic_ = std::move(imsic);
+      updateStateenMasks();  // IMSIC bit of mstateen0/hstateen0 depends on imsic_.
+    }
 
     /// Associate an ACLIC with this register file.
     void attachAclic(std::shared_ptr<TT_ACLIC::Aclic> aclic)
@@ -2131,8 +2147,8 @@ namespace WdRiscv
     /// that register is locked.  Return false otherwise.
     bool isPmpaddrLocked(CsrNumber csrn) const;
 
-    /// Set the max number of guest interrupt count. This should be
-    /// done before hypervisor mode is enable.
+    /// Set the max number of guest interrupt count. This must be done before
+    /// setDefaultMasks (configIsa) which derives the HGEIE/HGEIP masks from it.
     void setGuestInterruptCount(unsigned value)
     { geilen_ = value; }
 
@@ -2140,12 +2156,9 @@ namespace WdRiscv
     unsigned guestInterruptCount() const
     { return geilen_; }
 
-    /// Make bits GEILEN:1 of HGEIE and HGEIP writable and the others read-only zero.
-    void updateGuestInterruptMasks();
-
-    /// Enable/disable user mode.
-    void enableUserMode(bool flag)
-    { userEnabled_ = flag; }
+    /// Enable/disable user mode. This also makes MCOUNTEREN and MENVCFG/MENVCFGH
+    /// implemented/not-implemented.
+    void enableUserMode(bool flag);
 
     /// Enable/disable supervisor time compare.
     void enableSstc(bool flag)
@@ -2220,10 +2233,10 @@ namespace WdRiscv
     /// Enable/disable F extension.
     void enableRvf(bool flag);
 
-    /// Enable/disable C extension.
+    /// Enable/disable compressed instructions (C or Zca), which make IALIGN 16.
     void enableRvc(bool flag)
     {
-      // Least sig bit reads zero if C. Least sig 2 bits read zero if not C.
+      // Least sig bit reads zero if Zca. Least sig 2 bits read zero if not Zca.
       URV mask = ~URV(0) << (flag ? 1 : 2);  // 
       regs_.at(size_t(CsrNumber::MEPC)).setReadMask(mask);
       regs_.at(size_t(CsrNumber::SEPC)).setReadMask(mask);
@@ -2272,6 +2285,10 @@ namespace WdRiscv
     /// current value of MENVCFG.DTE.
     void enableSdt(bool flag);
 
+    /// Make VSSTATUS.SDT writable if Ssdbltrp and H are enabled and HENVCFG.DTE is set;
+    /// otherwise, make it read-only-zero.
+    void updateVsstatusSdt();
+
     /// Enable/disable vector extension.
     void enableVector(bool flag);
 
@@ -2301,6 +2318,10 @@ namespace WdRiscv
     /// Enable/disable zicfilp extension. Sets mseccfg/menvcfg/henvcfg/senvcfg.LPE
     /// to read-only zero if false.
     void enableZicfilp(bool flag);
+
+    /// Make MSECCFG/MSECCFGH implemented if an extension that adds a field to MSECCFG
+    /// (Smepmp, Zkr, Zicfilp, Smmpm) is enabled and not-implemented otherwise.
+    void updateMseccfg();
 
     /// Enable/disable zicfiss extension. Sets menvcfg/henvcfg/senvcfg.SSE
     /// to read-only zero if false.
@@ -2982,6 +3003,10 @@ namespace WdRiscv
     bool smcsrindOn_ = false;     // Smcsrind extension (indirect CSR).
     bool zihpmOn_ = false;        // Zihpm extension (performance counters).
     bool zicntrOn_ = false;       // Zicntr extension (counters).
+    bool smepmpOn_ = false;       // Smepmp extension (mseccfg.MML/MMWP/RLB).
+    bool zkrOn_ = false;          // Zkr extension (mseccfg.USEED/SSEED).
+    bool zicfilpOn_ = false;      // Zicfilp extension (mseccfg.MLPE).
+    bool smmpmOn_ = false;        // Smmpm extension (mseccfg.PMM).
     bool smdbltrpOn_ = false;
     bool ssdbltrpOn_ = false;
 

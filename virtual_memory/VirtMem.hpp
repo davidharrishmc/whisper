@@ -1090,8 +1090,11 @@ namespace WdRiscv
     template <typename PTE, typename VA>
     bool napotCheck(PTE& pte, VA va, int level)
     {
-      if (not pte.hasNapot() or not napotEnabled_)
+      if (not pte.hasNapot())
         return true;
+
+      if (not napotEnabled_)
+        return false;  // pte.N is reserved without Svnapot
 
       if (level >= 1)
         return false;  // pte.N == 1 reserved for level >= 1
