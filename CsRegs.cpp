@@ -9074,6 +9074,25 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       csr->setPokeMask(csr->getPokeMask() & ~rozBits);
     }
 
+  // MHPMEVENT.SINH/UINH/VSINH/VUINH (MHPMEVENTH in RV32) are read-only zero for privilege
+  // modes that are not implemented (Sscofpmf).
+  if (isa.isEnabled(RVE::Sscofpmf))
+    {
+      bool s = isa.isEnabled(RVE::S), u = isa.isEnabled(RVE::U), h = isa.isEnabled(RVE::H);
+      MhpmeventFields inh{0};
+      inh.bits_.SINH = not s;
+      inh.bits_.UINH = not u;
+      inh.bits_.VSINH = not (h and s);
+      inh.bits_.VUINH = not (h and u);
+      URV roz = rv32_ ? URV(inh.value_ >> 32) : URV(inh.value_);
+      for (unsigned i = 0; i < 29; ++i)
+        {
+          auto& csr = regs_.at(size_t(advance(rv32_ ? CN::MHPMEVENT3H : CN::MHPMEVENT3, i)));
+          csr.setWriteMask(csr.getWriteMask() & ~roz);
+          csr.setPokeMask(csr.getPokeMask() & ~roz);
+        }
+    }
+
   bool super = isa.isEnabled(RVE::S);
   bool user = isa.isEnabled(RVE::U);
 
