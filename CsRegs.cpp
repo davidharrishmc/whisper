@@ -6062,9 +6062,11 @@ CsRegs<URV>::defineAiaRegs()
   csr = defineCsr("vstopi",     CN::VSTOPI,     !mand, !imp, 0, wam, wam);
   csr->setHypervisor(true); csr->markAia(true);
 
+  // High halves (interrupts 32-63). No interrupt above 31 is implemented: midelegh,
+  // mvienh and hvienh are read-only zero, so sieh/siph and vsieh/vsiph must be too.
   if (sizeof(URV) == 4)
     {
-      csr = defineCsr("midelegh", CN::MIDELEGH, !mand, !imp, 0, wam, wam);
+      csr = defineCsr("midelegh", CN::MIDELEGH, !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::MIDELEGH, CN::MIDELEG);
       csr->markAia(true);
 
@@ -6072,7 +6074,7 @@ CsRegs<URV>::defineAiaRegs()
       markHighLowPair(CN::MIEH, CN::MIE);
       csr->markAia(true);
 
-      csr = defineCsr("mvienh",   CN::MVIENH,   !mand, !imp, 0, wam, wam);
+      csr = defineCsr("mvienh",   CN::MVIENH,   !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::MVIENH, CN::MVIEN);
       csr->markAia(true);
 
@@ -6084,12 +6086,12 @@ CsRegs<URV>::defineAiaRegs()
       markHighLowPair(CN::MIPH, CN::MIP);
       csr->markAia(true);
 
-      csr = defineCsr("sieh",     CN::SIEH,     !mand, !imp, 0, wam, wam);
+      csr = defineCsr("sieh",     CN::SIEH,     !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::SIEH, CN::SIE);
       csr->markAia(true);
       csr->setMapsToVirtual(true);
 
-      csr = defineCsr("siph",     CN::SIPH,     !mand, !imp, 0, wam, wam);
+      csr = defineCsr("siph",     CN::SIPH,     !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::SIPH, CN::SIP);
       csr->markAia(true);
       csr->setMapsToVirtual(true);
@@ -6098,7 +6100,7 @@ CsRegs<URV>::defineAiaRegs()
       markHighLowPair(CN::HIDELEGH, CN::HIDELEG);
       csr->markAia(true);
 
-      csr = defineCsr("hvienh",   CN::HVIENH,   !mand, !imp, 0, wam, wam);
+      csr = defineCsr("hvienh",   CN::HVIENH,   !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::HVIENH, CN::HVIEN);
       csr->markAia(true);
       csr->setHypervisor(true);
@@ -6117,11 +6119,11 @@ CsRegs<URV>::defineAiaRegs()
       csr->markAia(true);
       csr->setHypervisor(true);
 
-      csr = defineCsr("vsieh",    CN::VSIEH,    !mand, !imp, 0, wam, wam);
+      csr = defineCsr("vsieh",    CN::VSIEH,    !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::VSIEH, CN::VSIE);
       csr->markAia(true);
 
-      csr = defineCsr("vsiph",    CN::VSIPH,    !mand, !imp, 0, wam, wam);
+      csr = defineCsr("vsiph",    CN::VSIPH,    !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::VSIPH, CN::VSIP);
       csr->markAia(true);
     }
