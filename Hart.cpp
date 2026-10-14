@@ -738,7 +738,13 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Ssehv,    flag);
 
   if (isa_.isEnabled(RvExtension::Sstc))
-    enableRvsstc(true);
+    {
+      // Sstc (stimecmp, supervisor timer interrupt) requires S-mode.
+      if (isRvs())
+        enableRvsstc(true);
+      else if (verbose and hartIx_ == 0)
+        std::cerr << "Warning: Extension Sstc requires S-mode which is not enabled\n";
+    }
   if (isa_.isEnabled(RvExtension::Svinval))
     enableSvinval(true);
   if (isa_.isEnabled(RvExtension::Svnapot))
