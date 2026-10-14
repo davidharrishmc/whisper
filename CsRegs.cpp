@@ -1916,12 +1916,13 @@ CsRegs<URV>::updateSsp()
 
   // SSP accessibility follows effective xSSE:
   // - M-mode never has shadow stack access
-  // - U/VU access requires both HENVCFG.SSE and SENVCFG.SSE
+  // - U access requires SENVCFG.SSE
+  // - VU access requires both HENVCFG.SSE and SENVCFG.SSE
   // - Otherwise SSP remains supervisor-qualified
   PrivilegeMode mode = PrivilegeMode::Machine;
   if (mSse)
     {
-      bool ugate = hyperEnabled_ ? (hSse and sSse) : sSse;
+      bool ugate = virtMode_ ? (hSse and sSse) : sSse;
       mode = ugate ? PrivilegeMode::User : PrivilegeMode::Supervisor;
     }
   ssp->setPrivilegeMode(mode);
