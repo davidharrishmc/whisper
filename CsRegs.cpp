@@ -2147,6 +2147,28 @@ CsRegs<URV>::enableSsdbltrp(bool flag)
 
   // SDT and HENVCFG.DTE follow the current value of MENVCFG.DTE.
   enableSdt(flag and menvcfgDte());
+  updateVsstatusSdt();
+}
+
+
+template <typename URV>
+void
+CsRegs<URV>::updateVsstatusSdt()
+{
+  // VSSTATUS.SDT (bit 24) is read-only zero when HENVCFG.DTE is zero (hypervisor.adoc
+  // §henvcfg).
+  uint64_t value = 0;
+  bool flag = (ssdbltrpOn_ and hyperEnabled_ and read64(CsrNumber::HENVCFG, value) and
+               HenvcfgFields<uint64_t>(value).bits_.DTE);
+
+  URV sdtBit = URV(1) << 24;
+  auto& vsstatus = regs_.at(size_t(CsrNumber::VSSTATUS));
+
+  URV mask = vsstatus.getWriteMask();
+  vsstatus.setWriteMask(flag ? (mask | sdtBit) : (mask & ~sdtBit));
+
+  mask = vsstatus.getReadMask();
+  vsstatus.setReadMask(flag ? (mask | sdtBit) : (mask & ~sdtBit));
 }
 
 
@@ -4594,7 +4616,10 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
 
       bool dte = menvcfgDte();
       enableSdt(dte); // MENVCFG.DTE off makes SDT and HENVCFG.DTE read-only zero.
+      updateVsstatusSdt();
     }
+  else if (num == CN::HENVCFG or num == CN::HENVCFGH)
+    updateVsstatusSdt();  // HENVCFG.DTE off makes VSSTATUS.SDT read-only zero.
   else if ((num >= CN::MHPMEVENT3 and num <= CN::MHPMEVENT31) or
            (num >= CN::MHPMEVENT3H and num <= CN::MHPMEVENT31H))
     {
@@ -9261,6 +9286,7 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
   auto& vsstatus = regs_.at(size_t(CN::VSSTATUS));
   MstatusFields<URV> vsf{vsstatus.getPokeMask()};
   vsf.bits_.SPELP = isa.isEnabled(RVE::H) and zicfilp;
+  vsf.bits_.SDT = isa.isEnabled(RVE::H) and sdbltrp;  // VSSTATUS.SDT pokeable with Ssdbltrp.
   vsstatus.setPokeMask(vsf.value_);
 
   // Bit 1 of MTVEC is pokeable if either SMIJT is enabled.
