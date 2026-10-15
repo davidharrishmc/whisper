@@ -817,7 +817,7 @@ in MTVAL/STVAL will be the aligned address. When false, the effective address is
 as is.
 
 ### cancel_lr_on_trap
-When true (default), causes reservations to be canceled on traps.
+When true, causes reservations to be canceled on traps. Default is false.
 
 ### debug_park_loop
 Defines the address of the entry point of the debug mode park
