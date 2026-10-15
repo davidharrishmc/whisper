@@ -4643,6 +4643,16 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
 	  mnf.bits_.NMIE = 1;  // Attempt to clear mnstatus.nmie has no effect
 	  value = mnf.value_;
 	}
+
+      // MNPP is encoded like MSTATUS.MPP: it holds only supported privilege modes.
+      using PM = PrivilegeMode;
+      auto mnpp = PM{mnf.bits_.MNPP};
+      if ((mnpp == PM::Supervisor and not superEnabled_) or mnpp == PM::Reserved)
+        mnpp = PM::User;
+      if (mnpp == PM::User and not userEnabled_)
+        mnpp = PM::Machine;
+      mnf.bits_.MNPP = unsigned(mnpp);
+      value = mnf.value_;
     }
   else if (num == CN::TSELECT)
     {
@@ -5454,7 +5464,7 @@ CsRegs<URV>::defineMachineRegs()
 
   defineCsr("mncause", Csrn::MNCAUSE, !mand, !imp, 0, wam, wam);
 
-  mask = 0b1100010001000;  // Fields MNPP, MNPV, and NMIE writeable.
+  mask = 0b1101010001000;  // Fields MNPP, MNPELP, MNPV, and NMIE writeable.
   defineCsr("mnstatus", Csrn::MNSTATUS, !mand, !imp, 0b0000, mask, pokeMask);
 
   // Define mhpmcounter3/mhpmcounter3h to mhpmcounter31/mhpmcounter31h
@@ -9312,6 +9322,15 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       mask = smcdeleg ? (mask | cdeBit) : (mask & ~cdeBit);
       menvcfg.setPokeMask(mask);
     }
+
+  // MNSTATUS.MNPV read-only-zero without H, MNSTATUS.MNPELP read-only-zero without Zicfilp.
+  {
+    MnstatusFields mnf{0};
+    mnf.bits_.MNPV = not isa.isEnabled(RVE::H);
+    mnf.bits_.MNPELP = not zicfilp;
+    auto& mnstatus = regs_.at(size_t(CN::MNSTATUS));
+    mnstatus.setPokeMask(mnstatus.getPokeMask() & ~URV(mnf.value_));
+  }
 
   // SSTATUS.SDT
   auto& sstatus = regs_.at(size_t(CN::SSTATUS));

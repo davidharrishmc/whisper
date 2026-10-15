@@ -12785,6 +12785,11 @@ Hart<URV>::execMnret(const DecodedInst* di)
   bool savedVirt = mnf.bits_.MNPV;
 
   mnf.bits_.NMIE = 1;  // Set mnstatus.mnie
+
+  // Restore ELP.
+  if (isRvZicfilp())
+    setElp(isLandingPadEnabled(savedMode, savedVirt)? mnf.bits_.MNPELP : false);
+
   pokeCsr(CsrNumber::MNSTATUS, mnf.value_);
   recordCsrWrite(CsrNumber::MNSTATUS);
 
