@@ -947,8 +947,8 @@ namespace WdRiscv
     {
       addressMasksOn_ = flag;
       if (not flag)
-        for (unsigned i = 0; i < regions_.size(); ++i)
-          regions_.at(i).addrMask_ = ~uint64_t(0);
+        for (auto& region : regions_)
+          region.addrMask_ = ~uint64_t(0);
       onRegionsChanged();
     }
 
