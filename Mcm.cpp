@@ -3852,6 +3852,10 @@ Mcm<URV>::ppoRule2(Hart<URV>& hart, const McmInstr& instrB) const
   if (not instrB.isLoad_)
     return true;  // NA: B is not a load.
 
+  // Check element to element re-ordering.
+  if (instrB.di_.isVectorLoadIndexed() and not ppoRule2VecLdIx(hart, instrB))
+    return false;
+
   auto earlyB = effectiveMinTime(hart, instrB);
 
   unsigned hartIx = hart.sysHartIndex();
@@ -3918,6 +3922,86 @@ Mcm<URV>::ppoRule2(Hart<URV>& hart, const McmInstr& instrB) const
 		}
 	    }
 	}
+    }
+
+  return true;
+}
+
+
+template <typename URV>
+bool
+Mcm<URV>::ppoRule2VecLdIx(Hart<URV>& hart, const McmInstr& instrB) const
+{
+  // Only indexed-ordered loads (mop == 3) obey RVWMO at the element level. Element
+  // operations of other vector loads are unordered within the instruction.
+  unsigned mop = (instrB.di_.inst() >> 26) & 3;
+  if (not instrB.di_.isVectorLoadIndexed() or mop != 3)
+    return true;  // NA.
+
+  bool ordered = true;
+  for (size_t i = 1; i < instrB.memOps_.size() and ordered; ++i)
+    {
+      const auto& prevOp = sysMemOps_.at(instrB.memOps_.at(i-1));
+      const auto& op = sysMemOps_.at(instrB.memOps_.at(i));
+      if (op.elemIx_ < prevOp.elemIx_)
+        ordered = false;
+    }
+
+  if (ordered)
+    return true;
+
+  // Elements are not ordered. Fail if a later element read a byte before an earlier
+  // element read that same byte and a write from another hart to that byte occurred
+  // between the two reads (the two elements would then return values written by
+  // different memory operations).
+  unsigned hartIx = hart.sysHartIndex();
+  const auto& memOps = instrB.memOps_;
+
+  for (size_t i = 0; i < memOps.size(); ++i)
+    {
+      const auto& hiOp = sysMemOps_.at(memOps.at(i));  // Performed first.
+      if (hiOp.isCanceled())
+        continue;
+
+      for (size_t j = i + 1; j < memOps.size(); ++j)
+        {
+          const auto& loOp = sysMemOps_.at(memOps.at(j));  // Performed second.
+          if (loOp.isCanceled() or loOp.elemIx_ >= hiOp.elemIx_ or not loOp.overlaps(hiOp))
+            continue;
+
+          uint64_t start = std::max(loOp.pa_, hiOp.pa_);
+          uint64_t end = std::min(loOp.pa_ + loOp.size_, hiOp.pa_ + hiOp.size_);
+
+          for (uint64_t addr = start; addr < end; ++addr)
+            {
+              uint64_t hiTime = hiOp.time_ + hiOp.fwOffset_.at(addr - hiOp.pa_);
+              uint64_t loTime = loOp.time_ + loOp.fwOffset_.at(addr - loOp.pa_);
+              if (hiTime >= loTime)
+                continue;
+
+              for (uint64_t ix = memOps.at(i); ix <= memOps.at(j); ++ix)
+                {
+                  const MemoryOp& remoteOp = sysMemOps_.at(ix);
+                  if (remoteOp.isCanceled() or remoteOp.hartIx_ == hartIx or remoteOp.isRead_
+                      or not remoteOp.overlaps(addr))
+                    continue;
+
+                  auto rot = remoteOp.time_;
+                  if (hiTime <= rot and rot <= loTime)
+                    {
+                      cerr << (ppoWarn_ ? "Warning: " : "Error: ")
+                           << "PPO Rule 2 failed: hart-id=" << hart.hartId()
+                           << " tag=" << instrB.tag_ << " elem1=" << loOp.elemIx_
+                           << " elem2=" << hiOp.elemIx_ << " store-tag=" << remoteOp.tag_
+                           << " store-hart=" << unsigned(remoteOp.hartIx_)
+                           << " time1=" << loTime << " time2=" << hiTime
+                           << " store-time=" << rot
+                           << " addr=0x" << std::hex << addr << std::dec << '\n';
+                      return ppoWarn_;
+                    }
+                }
+            }
+        }
     }
 
   return true;
@@ -4448,8 +4532,11 @@ Mcm<URV>::ppoRule5(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
 
   auto hartIx = hart.sysHartIndex();
 
-  // B performs before A -- Allow if there is no write from another hart, overlapping line
-  // of B, at time between times of A and B.
+  // B performs before A -- Allow if A is a load there is no write from another hart,
+  // overlapping line of B, at time between times of A and B.
+  if (not instrB.isLoad_)
+    return false;
+
   for (size_t ix = sysMemOps_.size(); ix != 0; ix--)
     {
       const auto& op = sysMemOps_.at(ix-1);
@@ -5256,9 +5343,9 @@ Mcm<URV>::ppoRule12(Hart<URV>& hart, const McmInstr& instrB) const
 	  uint64_t addr = op.pa_ + i;
 	  auto iter = byteMap.find(addr);
 	  if (iter != byteMap.end())
-	    iter->second.time_ = std::min(iter->second.time_, op.forwardTime(addr));
+	    iter->second.time_ = std::min(iter->second.time_, op.time_);
 	  else
-	    byteMap[addr] = ByteInfo{0, op.forwardTime(addr)};
+	    byteMap[addr] = ByteInfo{0, op.time_};
 	}
     }
 

@@ -17,6 +17,10 @@ namespace WdRiscv
     Zfh,
     Zfhmin,
     Zlsseg,
+    Zk,
+    Zkt,
+    Zkn,
+    Zks,
     Zknd,
     Zkne,
     Zknh,
@@ -37,6 +41,7 @@ namespace WdRiscv
     Zvfhmin,
     Zvbb,
     Zvbc,
+    Zvkn,
     Zvkg,
     Zvkned,
     Zvknha,
@@ -128,6 +133,12 @@ namespace WdRiscv
     Zvfqwbdota8f,
     Zvfwbdota16bf,
     Svrsw60t59b,
+    Zvl32b,
+    Zvl64b,
+    Zvl128b,
+    Zvl256b,
+    Zvl512b,
+    Zvl1024b,
     None
   };
 

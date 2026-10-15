@@ -157,9 +157,20 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
   if (not config.applyIommuConfig(system))
     return false;
 
+  bool linux = false, newlib = false, semihost = false;
+  checkForNewlibOrLinux(args, linux, newlib, semihost);
+  bool clib = newlib or linux;
+
+  std::string isa;
+  if (not determineIsa(config, args, clib, isa))
+    return false;
+
+  for (char &c : isa)
+    c = static_cast<char>(std::tolower(c));
+
   // Configure harts. Define callbacks for non-standard CSRs.
   bool userMode = args.isa.find_first_of("uU") != std::string::npos;
-  if (not config.configHarts(system, userMode, args.verbose))
+  if (not config.configHarts(system, userMode, args.verbose, isa))
     if (not args.interactive)
       return false;
 
@@ -176,17 +187,9 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
   if (not args.instrLines.empty())
     system.enableInstructionLineTrace(args.instrLines);
 
-  bool linux = false, newlib = false, semihost = false;
-  checkForNewlibOrLinux(args, linux, newlib, semihost);
-  bool clib = newlib or linux;
-
   // If the MISA CSR is not configured by the user, then auto configure it to match the
   // ISA string.
   bool updateMisa = not config.hasCsrConfig("misa");
-
-  std::string isa;
-  if (not determineIsa(config, args, clib, isa))
-    return false;
 
   if (not openUserFiles(args))
     return false; 

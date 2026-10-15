@@ -256,6 +256,11 @@ template <typename URV>
 void
 Hart<URV>::execHlv_wu(const DecodedInst* di)
 {
+  if (not isRv64())
+    {
+      illegalInst(di);
+      return;
+    }
   hyperLoad<uint32_t>(di);
 }
 
@@ -292,6 +297,11 @@ template <typename URV>
 void
 Hart<URV>::execHlv_d(const DecodedInst* di)
 {
+  if (not isRv64())
+    {
+      illegalInst(di);
+      return;
+    }
   hyperLoad<uint64_t>(di);
 }
 

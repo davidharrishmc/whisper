@@ -574,10 +574,9 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Zalrsc, isa_.isEnabled(RvExtension::Zalrsc));
 
   // Zabha depends on Zaamo.
-  bool isaZabha = isa_.isEnabled(RvExtension::Zaamo) and isa_.isEnabled(RvExtension::Zaamo);
+  bool isaZabha = isa_.isEnabled(RvExtension::Zabha) and isa_.isEnabled(RvExtension::Zaamo);
   enableExtension(RvExtension::Zabha, isaZabha);
 
-  enableExtension(RvExtension::Zaamo, isaZabha);
   if (isa_.isEnabled(RvExtension::A))
     {
       enableExtension(RvExtension::A, flag);
@@ -628,10 +627,15 @@ Hart<URV>::processExtensions(bool verbose)
   if (isa_.isEnabled(RvExtension::M))
     {
       enableExtension(RvExtension::M, flag);
-      enableExtension(RvExtension::Zmmul, flag);
+      // M implies Zmmul. A listed Zmmul stays on when misa.M is cleared.
+      enableExtension(RvExtension::Zmmul, flag or isa_.isEnabled(RvExtension::Zmmul));
     }
-  else if (flag)
-    std::cerr << "Warning: Multiply extension (M) is not in the ISA string yet MISA.M is being set.\n";
+  else
+    {
+      enableExtension(RvExtension::M, false);  // M is on by default (Hart constructor)
+      if (flag)
+        std::cerr << "Warning: Multiply extension (M) is not in the ISA string yet MISA.M is being set.\n";
+    }
 
   flag = value & (URV(1) << ('v' - 'a'));  // User-mode option.
   if (flag and not (extensionIsEnabled(RvExtension::F) and extensionIsEnabled(RvExtension::D)))
@@ -734,7 +738,13 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Ssehv,    flag);
 
   if (isa_.isEnabled(RvExtension::Sstc))
-    enableRvsstc(true);
+    {
+      // Sstc (stimecmp, supervisor timer interrupt) requires S-mode.
+      if (isRvs())
+        enableRvsstc(true);
+      else if (verbose and hartIx_ == 0)
+        std::cerr << "Warning: Extension Sstc requires S-mode which is not enabled\n";
+    }
   if (isa_.isEnabled(RvExtension::Svinval))
     enableSvinval(true);
   if (isa_.isEnabled(RvExtension::Svnapot))
@@ -783,20 +793,9 @@ Hart<URV>::processExtensions(bool verbose)
         std::cerr << "Warning: Extension Smcdeleg requires Sscsrind which is not enabled\n";
     }
 
-  if (isa_.isEnabled(RvExtension::Zvknha) and isa_.isEnabled(RvExtension::Zvknhb))
-    {
-      std::cerr << "Info: Both Zvknha/b enabled.";
-      if (rv64_)
-        {
-          std::cerr << "Info:  Using Zvknhb.\n";
-          enableExtension(RvExtension::Zvknha, false);
-        }
-      else
-        {
-          std::cerr << "Info:  Using Zvknha.\n";
-          enableExtension(RvExtension::Zvknhb, false);
-        }
-    }
+  // Zvknhb implies Zvknha and is legal on RV32; it depends on Zve64x, not XLEN.
+  if (isa_.isEnabled(RvExtension::Zvknhb))
+    enableExtension(RvExtension::Zvknha, true);
 
   enableSmmpm(isa_.isEnabled(RvExtension::Smmpm));
   enableSsnpm(isa_.isEnabled(RvExtension::Ssnpm));
@@ -808,6 +807,7 @@ Hart<URV>::processExtensions(bool verbose)
 
   bool zca = isRvc() or isa_.isEnabled(RvExtension::Zca);  // C implies Zca
   enableExtension(RvExtension::Zca, zca);
+  csRegs_.enableRvc(zca);  // IALIGN is 16 with Zca: keep bit 1 of xepc.
 
   if (isa_.isEnabled(RvExtension::Zcd) and not zca)
     std::cerr << "Warning: Zcd extension enabled but pre-requisite Zca extension is not\n";
@@ -865,15 +865,22 @@ Hart<URV>::updateMemoryProtection()
 
   for (unsigned ix = 0; ix < count; ++ix)
     {
+      auto csrn = CsRegs<URV>::advance(CsrNumber::PMPADDR0, ix);
+      auto csr = csRegs_.findCsr(csrn);
+      assert(csr);
+      if (not csr->isImplemented())
+        continue;
+
+      if (csr->getPokeMask() == 0 and csr->getResetValue() == 0)
+        continue;
+
+      ++impCount;
+
       uint64_t low = 0, high = 0;
 
       Pmp pmp;
-      if (unpackMemoryProtection(ix, pmp, low, high))
-        {
-          impCount++;
-          if (pmp.type() != Pmp::Type::Off)
-            pmpMgr_.defineRegion(low, high, pmp, ix);
-        }
+      if (unpackMemoryProtection(ix, pmp, low, high) and pmp.type() != Pmp::Type::Off)
+        pmpMgr_.defineRegion(low, high, pmp, ix);
     }
 
 #ifndef FAST_SLOPPY
@@ -894,7 +901,7 @@ Hart<URV>::unpackMemoryProtection(unsigned entryIx, Pmp& pmp,
   if (entryIx >= 64)
     return false;
 
-  auto csrn = CsrNumber(unsigned(CsrNumber::PMPADDR0) + entryIx);
+  auto csrn = CsRegs<URV>::advance(CsrNumber::PMPADDR0, entryIx);
 
   URV pmpVal = 0;
   if (not peekCsr(csrn, pmpVal))
@@ -1096,17 +1103,22 @@ Hart<URV>::resetVector()
   if (isRvv())
     {
       bool configured = vecRegs_.registerCount() > 0;
-      if (not configured) {
-        constexpr uint32_t bytesPerReg = std::is_same<URV, uint32_t>::value ? 32 : 64;
-        constexpr uint32_t maxBytesPerElem = std::is_same<URV, uint32_t>::value ? 4 : 8;
-        vecRegs_.config(
-            bytesPerReg,
-            1 /*minBytesPerElem*/,
-            maxBytesPerElem,
-            nullptr /*minSewPerLmul*/,
-            nullptr /*maxSewPerLmul*/
-        );
-      }
+      if (not configured)
+        {
+          uint32_t bytesPerReg = isaVecBytesPerReg();
+
+          if (bytesPerReg == 0)
+            bytesPerReg = std::is_same<URV, uint32_t>::value ? 32 : 64;
+
+          constexpr uint32_t maxBytesPerElem = std::is_same<URV, uint32_t>::value ? 4 : 8;
+          vecRegs_.config(
+                          bytesPerReg,
+                          1 /*minBytesPerElem*/,
+                          maxBytesPerElem,
+                          nullptr /*minSewPerLmul*/,
+                          nullptr /*maxSewPerLmul*/
+                          );
+        }
       unsigned bytesPerReg = vecRegs_.bytesPerRegister();
       csRegs_.configCsr(CsrNumber::VLENB, true, bytesPerReg, 0, 0);
       auto vstartBits = uint32_t(std::bit_width(bytesPerReg*8) - 1);  // Log2(bytesPerReg*8)
@@ -2040,13 +2052,19 @@ Hart<URV>::determineLoadException(uint64_t& addr1, uint64_t& addr2, uint64_t& ga
   steeInsec1_ = false;
   steeInsec2_ = false;
 
-  auto checkPa = [this, pm, ldSize, misal, amo] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
+  // True if a misaligned access is within a misaligned atomicity granule.
+  bool inMag = false;
+
+  auto checkPa = [this, pm, ldSize, misal, amo, va1, va2, &inMag] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
     ldStFaultAddr_ = va;
 
-    // If checking the lower part of a misal address, do not cross alignment boundary.
+    // A misaligned access is checked as a lower part that does not cross the alignment
+    // boundary and an upper part with the remaining bytes. Within a misaligned atomicity
+    // granule it is a single memory operation, so the lower check covers all its bytes.
+    // If va1 is 0xffc and size is 8, then the parts are 4 bytes each.
     auto size = ldSize;
-    if (lower and misal)
-      size = ((pa + (size - 1)) & ~uint64_t(size - 1)) - pa;
+    if (misal)
+      size = lower ? (inMag ? ldSize : unsigned(va2 - va1)) : unsigned(va1 + ldSize - va2);
 
     if (pmpEnabled_)
       {
@@ -2119,6 +2137,13 @@ Hart<URV>::determineLoadException(uint64_t& addr1, uint64_t& addr2, uint64_t& ga
     }
   else
     {
+      uint64_t pmaAddr = steeEnabled_ ? stee_.clearSecureBits(pa1) : pa1;
+      if (auto mag = getPma(pmaAddr).misalAtomicGranule(); mag)
+        {
+          auto mask = ~uint64_t(mag - 1);
+          inMag = (pa1 & mask) == ((pa1 + ldSize - 1) & mask);
+        }
+
       if (inSeqnMisaligned_)
         if (auto cause = checkPa(va1, addr1, ldStPma1_, true); cause != EC::NONE)
           return cause;
@@ -3630,7 +3655,11 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
   // Must be done before writing S-mode EPC/CAUSE/TVAL registers.
   if (isRvssdbltrp() and nextMode == PM::Supervisor and not nextVirt and mstatus_.bits_.SDT)
     {
+      // mtval2 gets what the unexpected trap would have written to mcause, including
+      // the interrupt bit (supervisor.adoc "Double Trap Control in sstatus Register").
       URV origCause = cause;
+      if (interrupt)
+        origCause |= URV(1) << (mxlen_ - 1);
 
       // Build M-mode trap state inline (same pattern as aclicSaveContext Ssdbltrp path).
       mstatus_.bits_.MPP  = unsigned(origMode);
@@ -3647,7 +3676,9 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
       if (not csRegs_.write(CsrNumber::MCAUSE, PM::Machine, URV(EC2::DOUBLE_TRAP)))
         assert(0 and "Failed to write MCAUSE in Ssdbltrp double-trap escalation");
 
-      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, 0))
+      // mtval gets the unexpected trap's tval, as if it were taken into M-mode.
+      URV tval = (clearMtvalOnEgs_ and egsConstraint_) ? 0 : info;
+      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, tval))
         assert(0 and "Failed to write MTVAL in Ssdbltrp double-trap escalation");
 
       pokeCsr(CsrNumber::MTVAL2, origCause);  // original cause → mtval2
@@ -4189,8 +4220,8 @@ Hart<URV>::aclicSaveContext(PrivilegeMode origMode, PrivilegeMode nextMode, URV 
       // it was already enabled via enableHypervisorMode. Either way it works.
       pokeCsr(CsrNumber::MTVAL2, URV(cause));  // best-effort; not fatal if absent
 
-      // mtval = 0 (no specific address for double-trap at context save)
-      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, 0))
+      // mtval = faulting address of the context push, as the non-escalated path reports it.
+      if (not csRegs_.write(CsrNumber::MTVAL, PM::Machine, ldStFaultAddr_))
         assert(0 and "Failed to write MTVAL in Ssdbltrp escalation");
 
       // switch to M-mode and redirect to mtvec
@@ -4895,7 +4926,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
           writeMstatus();
         }
       csRegs_.recordWrite(CN::MSTATUS);
-    }
+  }
 
   if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
     {
@@ -5216,7 +5247,8 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
       if (not csr)
 	return false;
 
-      URV misaReset = csr->getResetValue();
+      // MXL is 1 for RV32 and 2 for RV64.
+      URV misaReset = URV(sizeof(URV) == 4 ? 1 : 2) << (sizeof(URV)*8 - 2);
       if (isa_.isEnabled(RvExtension::A))
 	misaReset |= URV(1);
       if (isa_.isEnabled(RvExtension::B))
@@ -5225,12 +5257,20 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
 	misaReset |= URV(4);
       if (isa_.isEnabled(RvExtension::D))
 	misaReset |= URV(8);
+      if (isa_.isEnabled(RvExtension::E))
+        misaReset |= URV(16);
+      else
+        misaReset |= URV(1) << ('I' - 'A');
       if (isa_.isEnabled(RvExtension::F))
 	misaReset |= URV(1) << ('F' - 'A');
       if (isa_.isEnabled(RvExtension::H))
 	misaReset |= URV(1) << ('H' - 'A');
       if (isa_.isEnabled(RvExtension::M))
 	misaReset |= URV(1) << ('M' - 'A');
+      if (isa_.isEnabled(RvExtension::S))
+	misaReset |= URV(1) << ('S' - 'A');
+      if (isa_.isEnabled(RvExtension::U))
+	misaReset |= URV(1) << ('U' - 'A');
       if (isa_.isEnabled(RvExtension::V))
 	misaReset |= URV(1) << ('V' - 'A');
 
@@ -5241,10 +5281,42 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
 	return false;
     }
 
+  // The hypervisor extension requires Sv32 on RV32 and at least Sv39 on RV64.
+  if (isa_.isEnabled(RvExtension::H))
+    {
+      auto mode = rv64_ ? VirtMem::Mode::Sv39 : VirtMem::Mode::Sv32;
+      if (not virtMem_.isModeSupported(mode))
+	{
+	  std::cerr << "Error: Extension H requires address translation mode "
+		    << (rv64_ ? "sv39" : "sv32") << '\n';
+	  return false;
+	}
+    }
+
   // Change the default values of the poke (implemened bits) and write masks of the CSRs
   // based on the extensions in the isa string. The masks may later be changed by the CSR
   // configurations in the user config file (e.g. whisper.json).
   csRegs_.setDefaultMasks(isa_);
+
+  // MSTATUS.SUM is read-only zero if SATP.MODE is read-only zero (only Bare supported).
+  using SM = SvMode;
+  bool bareOnly = true;
+  for (auto mode : { SM::Sv32, SM::Sv39, SM::Sv48, SM::Sv57, SM::Sv64 })
+    bareOnly = bareOnly and not virtMem_.isModeSupported(mode);
+  if (bareOnly)
+    {
+      MstatusFields<URV> sum{0};
+      sum.bits_.SUM = 1;
+      for (auto csrn : { CsrNumber::MSTATUS, CsrNumber::SSTATUS })
+        {
+          auto csr = csRegs_.findCsr(csrn);
+          if (csr)
+            {
+              csr->setWriteMask(csr->getWriteMask() & ~sum.value_);
+              csr->setPokeMask(csr->getPokeMask() & ~sum.value_);
+            }
+        }
+    }
 
   return true;
 }  
@@ -5322,6 +5394,7 @@ bool
 Hart<URV>::configGuestInterruptCount(unsigned n)
 {
   csRegs_.setGuestInterruptCount(n);
+  csRegs_.updateGuestInterruptMasks();
   return true;
 }
 
@@ -7404,7 +7477,7 @@ Hart<URV>::processTimerInterrupt()
     }
 
   // Deliver/clear supervisor timer from stimecmp CSR.
-  if (stimecmpActive_)
+  if (stimecmpActive_ and stipEnabled_)
     {
       if (time_ >= stimecmp_)
         mipVal = mipVal | (URV(1) << URV(IC::S_TIMER));
@@ -7451,7 +7524,7 @@ Hart<URV>::processTimerInterrupt()
       else if (alarmLimit_ != ~uint64_t(0) and alarmLimit_ > time_)
         deadline = std::min(deadline, alarmLimit_);
     }
-  if (stimecmpActive_ and stimecmp_ > time_)
+  if (stimecmpActive_ and stipEnabled_ and stimecmp_ > time_)
     deadline = std::min(deadline, stimecmp_);
   nextTimerDeadline_ = deadline;
   timerStateStale_ = false;
@@ -12328,7 +12401,7 @@ Hart<URV>::execSinval_vma(const DecodedInst* di)
 {
   if (not isRvs() or not isRvsvinval() or privMode_ < PrivilegeMode::Supervisor)
    {
-      if (virtMode_ and privMode_ == PrivilegeMode::User)
+      if (virtMode_ and privMode_ == PrivilegeMode::User and isRvsvinval())
 	virtualInst(di);
       else
 	illegalInst(di);
@@ -12344,7 +12417,7 @@ Hart<URV>::execSfence_w_inval(const DecodedInst* di)
 {
   if (not isRvs() or not isRvsvinval() or privMode_ < PrivilegeMode::Supervisor)
     {
-      if (virtMode_ and privMode_ == PrivilegeMode::User)
+      if (virtMode_ and privMode_ == PrivilegeMode::User and isRvsvinval())
 	virtualInst(di);
       else
 	illegalInst(di);
@@ -12359,7 +12432,7 @@ Hart<URV>::execSfence_inval_ir(const DecodedInst* di)
 {
   if (not isRvs() or not isRvsvinval() or privMode_ < PrivilegeMode::Supervisor)
     {
-      if (virtMode_ and privMode_ == PrivilegeMode::User)
+      if (virtMode_ and privMode_ == PrivilegeMode::User and isRvsvinval())
 	virtualInst(di);
       else
 	illegalInst(di);
@@ -12431,7 +12504,7 @@ namespace WdRiscv
     // 1.6b. Ssdbltrp: MRET to U-mode (or VS/VU in H-mode) clears sstatus.SDT.
     // Spec supervisor.adoc: "When MRET or SRET are executed in M-mode and the
     // new privilege mode is U, VS, or VU, sstatus.SDT is also set to 0."
-    if (isRvssdbltrp() and savedMode < PrivilegeMode::Supervisor)
+    if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
       fields.bits_.SDT = 0;
 
     // 1.7. Write back MSTATUS.
@@ -12479,6 +12552,9 @@ namespace WdRiscv
     if (breakpOrEnterDebugTripped())
       return;
 
+    if (sdtrigOn_)
+      csRegs_.restoreTcontrolMte();
+
     // 1. Restore privilege mode, interrupt enable, and virtual mode.
     uint32_t value = csRegs_.peekMstatus();
     uint32_t hvalue = peekCsr(CsrNumber::MSTATUSH);
@@ -12517,6 +12593,10 @@ namespace WdRiscv
     // For RV32, MDT is bit 10 of mstatush (bit 42 overall = 42 - 32 = 10).
     if (isRvsmdbltrp())
       hvalue &= ~ uint32_t(1 << 10);
+
+    // 1.6b. Ssdbltrp: MRET to U, VS, or VU clears sstatus.SDT (machine.html line 1409-1411).
+    if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
+      fields.bits_.SDT = 0;
 
     // 1.7. Write back MSTATUS.
     if (not csRegs_.write(CsrNumber::MSTATUS, privMode_, fields.value_))
@@ -12711,6 +12791,11 @@ Hart<URV>::execMnret(const DecodedInst* di)
   bool savedVirt = mnf.bits_.MNPV;
 
   mnf.bits_.NMIE = 1;  // Set mnstatus.mnie
+
+  // Restore ELP.
+  if (isRvZicfilp())
+    setElp(isLandingPadEnabled(savedMode, savedVirt)? mnf.bits_.MNPELP : false);
+
   pokeCsr(CsrNumber::MNSTATUS, mnf.value_);
   recordCsrWrite(CsrNumber::MNSTATUS);
 
@@ -12732,6 +12817,13 @@ Hart<URV>::execMnret(const DecodedInst* di)
       if (isRvsmdbltrp() and mstatus_.bits_.MDT)
 	{
 	  mstatus_.bits_.MDT = 0;
+	  needWrite = true;
+	}
+      // Ssdbltrp: MNRET to U, VS, or VU sets sstatus.SDT to 0 (same lines).
+      if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt) and
+	  mstatus_.bits_.SDT)
+	{
+	  mstatus_.bits_.SDT = 0;
 	  needWrite = true;
 	}
       if (mstatus_.bits_.MPRV != 0)
@@ -13942,14 +14034,19 @@ Hart<URV>::determineStoreException(uint64_t& addr1, uint64_t& addr2,
   steeInsec1_ = false;
   steeInsec2_ = false;
 
-  auto checkPa = [this, pm, stSize, misal, amo] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
+  // True if a misaligned access is within a misaligned atomicity granule.
+  bool inMag = false;
+
+  auto checkPa = [this, pm, stSize, misal, amo, va1, va2, &inMag] (uint64_t va, uint64_t& pa, Pma& pma, bool lower) -> EC {
     ldStFaultAddr_ = va;
 
-    // If checking the lower part of a misal address, do not cross alignment boundary.
-    // If pa is 0xffc and size is 8, then size becomes 4 (dist to next multiple of 8).
+    // A misaligned access is checked as a lower part that does not cross the alignment
+    // boundary and an upper part with the remaining bytes. Within a misaligned atomicity
+    // granule it is a single memory operation, so the lower check covers all its bytes.
+    // If va1 is 0xffc and size is 8, then the parts are 4 bytes each.
     auto size = stSize;
-    if (lower and misal)
-      size = ((pa + (size - 1)) & ~uint64_t(size - 1)) - pa;
+    if (misal)
+      size = lower ? (inMag ? stSize : unsigned(va2 - va1)) : unsigned(va1 + stSize - va2);
 
     if (pmpEnabled_)
       {
@@ -14020,6 +14117,13 @@ Hart<URV>::determineStoreException(uint64_t& addr1, uint64_t& addr2,
     }
   else
     {
+      uint64_t pmaAddr = steeEnabled_ ? stee_.clearSecureBits(pa1) : pa1;
+      if (auto mag = getPma(pmaAddr).misalAtomicGranule(); mag)
+        {
+          auto mask = ~uint64_t(mag - 1);
+          inMag = (pa1 & mask) == ((pa1 + stSize - 1) & mask);
+        }
+
       if (inSeqnMisaligned_)
         if (auto cause = checkPa(va1, addr1, ldStPma1_, true); cause != EC::NONE)
           return cause;
@@ -14972,7 +15076,9 @@ Hart<URV>::execMop_r(const DecodedInst* di)
       return;
     }
 
-  if (isShadowStackEnabled(privMode_, virtMode_))
+  // Only mop.r.28 encodes shadow stack instructions (sspopchk, ssrdp).
+  bool mopR28 = (di->inst() >> 20) == 0xcdc;
+  if (mopR28 and isShadowStackEnabled(privMode_, virtMode_))
     {
       if (di->op0() == 0 and (di->op1() == 1 or di->op1() == 5))
         {
@@ -15001,7 +15107,9 @@ Hart<URV>::execMop_rr(const DecodedInst* di)
       return;
     }
 
-  if (isShadowStackEnabled(privMode_, virtMode_))
+  // Only mop.rr.7 encodes a shadow stack instruction (sspush).
+  bool mopRr7 = (di->inst() >> 25) == 0x67;
+  if (mopRr7 and isShadowStackEnabled(privMode_, virtMode_))
     {
       // SSPUSH is encoded as mop_rr with rd=x0, rs1=x0, rs2 in {x1,x5}.
       // Use rs2 (op2) as the pushed register source.

@@ -31,6 +31,10 @@ static constexpr auto STRING_EXT_PAIRS = std::to_array<std::pair<std::string_vie
   { "zfh", RvExtension::Zfh },
   { "zfhmin", RvExtension::Zfhmin },
   { "zlssegh", RvExtension::Zlsseg },
+  { "zk", RvExtension::Zk },
+  { "zkt", RvExtension::Zkt },
+  { "zkn", RvExtension::Zkn },
+  { "zks", RvExtension::Zks },
   { "zknd", RvExtension::Zknd },
   { "zkne", RvExtension::Zkne },
   { "zknh", RvExtension::Zknh },
@@ -51,6 +55,7 @@ static constexpr auto STRING_EXT_PAIRS = std::to_array<std::pair<std::string_vie
   { "zvfhmin", RvExtension::Zvfhmin },
   { "zvbb", RvExtension::Zvbb },
   { "zvbc", RvExtension::Zvbc },
+  { "zvkn", RvExtension::Zvkn },
   { "zvkg", RvExtension::Zvkg },
   { "zvkned", RvExtension::Zvkned },
   { "zvknha", RvExtension::Zvknha },
@@ -136,12 +141,19 @@ static constexpr auto STRING_EXT_PAIRS = std::to_array<std::pair<std::string_vie
   { "zvfqwbdota8f", RvExtension::Zvfqwbdota8f },
   { "zvfwbdota16bf", RvExtension::Zvfwbdota16bf },
   { "svrsw60t59b", RvExtension::Svrsw60t59b },
+  { "Zvl32b", RvExtension::Zvl32b },
+  { "Zvl64b", RvExtension::Zvl64b },
+  { "Zvl128b", RvExtension::Zvl128b },
+  { "Zvl256b", RvExtension::Zvl256b },
+  { "Zvl512b", RvExtension::Zvl512b },
+  { "Zvl1024b", RvExtension::Zvl1024b },
   { "smcdeleg", RvExtension::Smcdeleg },
   { "smcsrind", RvExtension::Smcsrind },
   { "sscsrind", RvExtension::Sscsrind },
   { "smcntrpmf", RvExtension::Smcntrpmf },
   { "smepmp", RvExtension::Smepmp },
 });
+
 static_assert(STRING_EXT_PAIRS.size() == static_cast<unsigned>(RvExtension::None));
 
 const std::unordered_map<std::string_view, RvExtension> Isa::stringToExt_(STRING_EXT_PAIRS.cbegin(),
@@ -189,6 +201,10 @@ Isa::Isa()
   infoVec_.at(extIx(RvExtension::Zfa)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zfhmin)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zlsseg)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zk)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zkt)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zkn)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zks)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zknd)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zkne)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zknh)) = Info{ {{1,0}}, {1,0} };
@@ -207,6 +223,7 @@ Isa::Isa()
   infoVec_.at(extIx(RvExtension::Zmmul)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zvfh)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zvkb)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvkn)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zvkg)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zvkned)) = Info{ {{1,0}}, {1,0} };
   infoVec_.at(extIx(RvExtension::Zvknha)) = Info{ {{1,0}}, {1,0} };
@@ -293,6 +310,12 @@ Isa::Isa()
   infoVec_.at(extIx(RvExtension::Zvfqwbdota8f)) = Info{ {{0,2}}, {0,2} };
   infoVec_.at(extIx(RvExtension::Zvfwbdota16bf)) = Info{ {{0,2}}, {0,2} };
   infoVec_.at(extIx(RvExtension::Svrsw60t59b)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvl32b)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvl64b)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvl128b)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvl256b)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvl512b)) = Info{ {{1,0}}, {1,0} };
+  infoVec_.at(extIx(RvExtension::Zvl1024b)) = Info{ {{1,0}}, {1,0} };
 
   infoVec_.at(extIx(RvExtension::I)).enabled = true; // I always enabled.
 }
@@ -620,6 +643,14 @@ Isa::applyIsaString(std::string_view isaStr)
       if (not parseIsa(token, extension, version, subversion))
 	return false;
 
+      if (extension == "g")
+        {
+          using enum RvExtension;
+          for (auto ext : { I, M, F, A, D, Zicsr, Zifencei })
+            enable(ext, true);
+          continue;
+        }
+
       RVE ext = stringToExtension(extension);
       if (ext == RVE::None)
 	{
@@ -631,6 +662,20 @@ Isa::applyIsaString(std::string_view isaStr)
 
       if (ext == RVE::B)
 	for (RVE subExt : { RVE::Zba, RVE::Zbb, RVE::Zbs } )
+	  enable(subExt, true);
+
+      // Zk is Zkn + Zkr + Zkt, Zkn is Zbkb + Zbkc + Zbkx + Zkne + Zknd + Zknh, and Zks
+      // is Zbkb + Zbkc + Zbkx + Zksed + Zksh.
+      if (ext == RVE::Zk)
+	for (RVE subExt : { RVE::Zkn, RVE::Zkr, RVE::Zkt } )
+	  enable(subExt, true);
+
+      if (ext == RVE::Zk or ext == RVE::Zkn)
+	for (RVE subExt : { RVE::Zbkb, RVE::Zbkc, RVE::Zbkx, RVE::Zkne, RVE::Zknd, RVE::Zknh } )
+	  enable(subExt, true);
+
+      if (ext == RVE::Zks)
+	for (RVE subExt : { RVE::Zbkb, RVE::Zbkc, RVE::Zbkx, RVE::Zksed, RVE::Zksh } )
 	  enable(subExt, true);
 
       if (ext == RVE::Zabha)
@@ -680,6 +725,7 @@ Isa::applyIsaString(std::string_view isaStr)
 //  { RvExtension::Smip,     RvExtension::Smcsps,   "smip",     "smcsps"   },
 //  { RvExtension::Ssip,     RvExtension::Sscsps,   "ssip",     "sscsps"   },
   });
+
   bool depsOk = true;
   for (const auto& d : deps)
     if (isEnabled(d.ext) and not isEnabled(d.req))
@@ -688,6 +734,7 @@ Isa::applyIsaString(std::string_view isaStr)
                   << " but " << d.reqName << " is not in the ISA string.\n";
         depsOk = false;
       }
+
   if (not depsOk)
     return false;
 

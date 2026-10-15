@@ -58,7 +58,7 @@ Hart<URV>::determineSsException(uint64_t& addr, uint64_t& gaddr, uint64_t size, 
   if (pmpEnabled_)
     {
       auto effPm = effectivePrivilege();
-      const Pmp& pmp = pmpMgr_.accessPmp(effPm, addr, sizeof(URV));
+      const Pmp& pmp = pmpMgr_.accessPmp(effPm, addr, size);
       if (not pmp.isRead()  or not pmp.isWrite())
 	return EC::STORE_ACC_FAULT;
     }
@@ -174,7 +174,7 @@ template <typename URV>
 void
 Hart<URV>::execSsamoswap_w(const DecodedInst* di)
 {
-  if (not isRva() or not isRvZicfiss())
+  if (not isRvZaamo() or not isRvZicfiss())
     {
       illegalInst(di);
       return;
@@ -244,7 +244,7 @@ template <typename URV>
 void
 Hart<URV>::execSsamoswap_d(const DecodedInst* di)
 {
-  if (not isRva() or not isRvZicfiss() or not isRv64())
+  if (not isRvZaamo() or not isRvZicfiss() or not isRv64())
     {
       illegalInst(di);
       return;
