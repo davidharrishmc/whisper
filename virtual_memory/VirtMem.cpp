@@ -295,6 +295,10 @@ VirtMem::translate(uint64_t va, PrivilegeMode priv, bool twoStage,
   if (entry)
     {
       bool isSs = isSsPage(entry->read_, entry->write_, entry->exec_) and ssEnabled_;
+      // Zicfiss: xwr=010 is reserved when SS pages are disabled. Changes to
+      // xSSE take effect without an sfence, so the entry may be stale.
+      if (isSsPage(entry->read_, entry->write_, entry->exec_) and not ssEnabled_)
+        return stage1PageFaultType(read, write, exec);
       // Use TLB entry.
       if (priv == PrivilegeMode::User and not entry->user_)
         return stage1PageFaultType(read, write, exec);
@@ -560,6 +564,10 @@ VirtMem::stage1Translate(uint64_t va, PrivilegeMode priv, bool read, bool write,
   if (entry)
     {
       bool isSs = isSsPage(entry->read_, entry->write_, entry->exec_) and vsSsEnabled_;
+      // Zicfiss: xwr=010 is reserved when SS pages are disabled. Changes to
+      // xSSE take effect without an sfence, so the entry may be stale.
+      if (isSsPage(entry->read_, entry->write_, entry->exec_) and not vsSsEnabled_)
+        return stage1PageFaultType(read, write, exec);
       if (priv == PrivilegeMode::User and not entry->user_)
         return stage1PageFaultType(read, write, exec);
       if (priv == PrivilegeMode::Supervisor)
@@ -754,7 +762,7 @@ VirtMem::pageTableWalk(uint64_t address, PrivilegeMode privMode, bool read, bool
 
       // 3.
       if (not isValidPte(pte))
-        if (not ssMode_ or (ssEnabled_ and not isSsPte(pte)))
+        if (not (ssEnabled_ and isSsPte(pte)))
           return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
 
       // 4.
@@ -792,6 +800,10 @@ VirtMem::pageTableWalk(uint64_t address, PrivilegeMode privMode, bool read, bool
       if (privMode == PrivilegeMode::Supervisor and pte.user() and
 	  (not sum_ or exec))
         return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
+
+      // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
+      if (isSsPte(pte) and ssEnabled_ and not exec and isSsAccessFault(read))
+        return traceException(accessFaultType(read, write, exec), exec, walkIx);
 
       if (ssMode_)
         {
@@ -1161,7 +1173,7 @@ VirtMem::stage1PageTableWalk(uint64_t address, PrivilegeMode privMode, bool read
 
       // 3.
       if (not isValidPte(pte))
-        if (not ssMode_ or (ssEnabled_ and not isSsPte(pte)))
+        if (not (vsSsEnabled_ and isSsPte(pte)))
           return traceException(stage1PageFaultType(read, write, exec), forFetch_, walkIx);
 
       // 4.
@@ -1198,6 +1210,10 @@ VirtMem::stage1PageTableWalk(uint64_t address, PrivilegeMode privMode, bool read
       if (privMode == PrivilegeMode::Supervisor and pte.user() and
 	  (not vsSum_ or exec))
         return traceException(stage1PageFaultType(read, write, exec), forFetch_, walkIx);
+
+      // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
+      if (isSsPte(pte) and vsSsEnabled_ and not exec and isSsAccessFault(read))
+        return traceException(accessFaultType(read, write, exec), forFetch_, walkIx);
 
       if (ssMode_)
         {
