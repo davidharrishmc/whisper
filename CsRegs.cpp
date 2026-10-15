@@ -1703,6 +1703,42 @@ CsRegs<URV>::readSignExtend(CsrNumber number, PrivilegeMode mode, URV& value) co
 
 template <typename URV>
 void
+CsRegs<URV>::enableUserMode(bool flag)
+{
+  userEnabled_ = flag;
+
+  using CN = CsrNumber;
+
+  // With U-mode, MCOUNTEREN and MENVCFG (and MENVCFGH in RV32) must be implemented.
+  // Without U-mode, MENVCFG/MENVCFGH do not exist and MCOUNTEREN should not exist:
+  // MCOUNTEREN is kept only if the configuration file marks it as existing.
+  for (auto csrn : { CN::MCOUNTEREN, CN::MENVCFG, CN::MENVCFGH })
+    {
+      if (csrn == CN::MENVCFGH and not rv32_)
+        continue;
+      auto csr = findCsr(csrn);
+      bool keep = csrn == CN::MCOUNTEREN and csr->isUserEnabled();
+      if (flag and csr->isUserDisabled())
+        {
+          std::cerr << "Warning: CSR " << csr->getName() << " must be implemented "
+                    << "when U-mode is -- ignoring configuration that disables it\n";
+          csr->setUserDisabled(false);
+        }
+      else if (not flag and not keep and csr->isUserEnabled())
+        {
+          std::cerr << "Warning: CSR " << csr->getName() << " does not exist "
+                    << "without U-mode -- ignoring configuration that enables it\n";
+          csr->setUserEnabled(false);
+        }
+      csr->setImplemented(flag or keep);
+    }
+
+  updateSstc();  // To activate/deactivate STIMECMP (depends on MCOUNTEREN).
+}
+
+
+template <typename URV>
+void
 CsRegs<URV>::enableSupervisorMode(bool flag)
 {
   superEnabled_ = flag;
@@ -1916,12 +1952,13 @@ CsRegs<URV>::updateSsp()
 
   // SSP accessibility follows effective xSSE:
   // - M-mode never has shadow stack access
-  // - U/VU access requires both HENVCFG.SSE and SENVCFG.SSE
+  // - U access requires SENVCFG.SSE
+  // - VU access requires both HENVCFG.SSE and SENVCFG.SSE
   // - Otherwise SSP remains supervisor-qualified
   PrivilegeMode mode = PrivilegeMode::Machine;
   if (mSse)
     {
-      bool ugate = hyperEnabled_ ? (hSse and sSse) : sSse;
+      bool ugate = virtMode_ ? (hSse and sSse) : sSse;
       mode = ugate ? PrivilegeMode::User : PrivilegeMode::Supervisor;
     }
   ssp->setPrivilegeMode(mode);
@@ -2147,6 +2184,28 @@ CsRegs<URV>::enableSsdbltrp(bool flag)
 
   // SDT and HENVCFG.DTE follow the current value of MENVCFG.DTE.
   enableSdt(flag and menvcfgDte());
+  updateVsstatusSdt();
+}
+
+
+template <typename URV>
+void
+CsRegs<URV>::updateVsstatusSdt()
+{
+  // VSSTATUS.SDT (bit 24) is read-only zero when HENVCFG.DTE is zero (hypervisor.adoc
+  // §henvcfg).
+  uint64_t value = 0;
+  bool flag = (ssdbltrpOn_ and hyperEnabled_ and read64(CsrNumber::HENVCFG, value) and
+               HenvcfgFields<uint64_t>(value).bits_.DTE);
+
+  URV sdtBit = URV(1) << 24;
+  auto& vsstatus = regs_.at(size_t(CsrNumber::VSSTATUS));
+
+  URV mask = vsstatus.getWriteMask();
+  vsstatus.setWriteMask(flag ? (mask | sdtBit) : (mask & ~sdtBit));
+
+  mask = vsstatus.getReadMask();
+  vsstatus.setReadMask(flag ? (mask | sdtBit) : (mask & ~sdtBit));
 }
 
 
@@ -2499,7 +2558,7 @@ CsRegs<URV>::updateStateenMasks()
       mbits.bits_.SRMCFG = ssqosidOn_;
       mbits.bits_.P1P13 = rv32_ and hyperEnabled_;  // HEDELEGH exists only in RV32.
       mbits.bits_.CONTEXT = sdtrigOn_;
-      mbits.bits_.IMSIC = aiaEnabled_;
+      mbits.bits_.IMSIC = aiaEnabled_ and imsic_;  // Read-only zero without an IMSIC.
       mbits.bits_.AIA = aiaEnabled_;
       mbits.bits_.CSRIND = aiaEnabled_ or sscsrindOn_;
       mbits.bits_.ENVCFG = 1;
@@ -2527,6 +2586,19 @@ CsRegs<URV>::updateStateenMasks()
     {
       update(CN::MSTATEEN0, managed.value_, mbits.value_);
       update(CN::HSTATEEN0, managed.value_, hbits.value_);
+    }
+
+  // Bit 63 (SE) of mstateen1-3 may be read-only zero only if the hypervisor extension is
+  // not implemented; otherwise, it must be writeable. Bit 63 of each hstateen is always
+  // writable.
+  URV se = URV(1) << (8*sizeof(URV) - 1);  // Bit 63 (bit 31 of high CSR in rv32).
+  for (unsigned ix = 1; ix <= 3; ++ix)
+    {
+      // CN mnum = advance(rv32_ ? CN::MSTATEEN0H : CN::MSTATEEN0, ix);
+      // update(mnum, se, hyperEnabled_ ? se : 0);
+
+      CN hnum = advance(rv32_ ? CN::HSTATEEN0H : CN::HSTATEEN0, ix);
+      update(hnum, se, se);
     }
 }
 
@@ -2672,6 +2744,9 @@ CsRegs<URV>::enableSmmpm(bool flag)
 {
   using CN = CsrNumber;
 
+  smmpmOn_ = flag;
+  updateMseccfg();
+
   if constexpr (sizeof(URV) == 8)
     {
       uint8_t mask = flag? 0x3 : 0;
@@ -2753,6 +2828,24 @@ CsRegs<URV>::enableZkr(bool flag)
   mf.bits_.USEED = flag and userEnabled_;
   mf.bits_.SSEED = flag and superEnabled_;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
+
+  zkrOn_ = flag;
+  updateMseccfg();
+}
+
+
+template <typename URV>
+void
+CsRegs<URV>::updateMseccfg()
+{
+  using CN = CsrNumber;
+
+  // MSECCFG exists if any extension that adds a field to it is implemented. Otherwise,
+  // it is reserved.
+  bool exists = smepmpOn_ or zkrOn_ or zicfilpOn_ or smmpmOn_;
+  regs_.at(size_t(CN::MSECCFG)).setImplemented(exists);
+  if (rv32_)
+    regs_.at(size_t(CN::MSECCFGH)).setImplemented(exists);
 }
 
 
@@ -2769,6 +2862,9 @@ CsRegs<URV>::enableSmepmp(bool flag)
   mf.bits_.MMWP = flag;
   mf.bits_.RLB = flag;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
+
+  smepmpOn_ = flag;
+  updateMseccfg();
 }
 
 
@@ -2821,6 +2917,8 @@ CsRegs<URV>::enableZicfilp(bool flag)
   MseccfgFields<URV> mf{regs_.at(size_t(CN::MSECCFG)).getReadMask()};
   mf.bits_.MLPE = flag;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
+  zicfilpOn_ = flag;
+  updateMseccfg();
 
   MenvcfgFields<URV> env{regs_.at(size_t(CN::MENVCFG)).getReadMask()};
   env.bits_.LPE = flag;
@@ -2979,10 +3077,9 @@ CsRegs<URV>::legalizeMstatus(URV value) const
 
   if constexpr (sizeof(URV) == 8)
     {
-      if (fields.bits_.SXL != 2)
-        fields.bits_.SXL = 2;
-      if (fields.bits_.UXL != 2)
-        fields.bits_.UXL = 2;
+      // SXL/UXL are read-only zero if S/U is not implemented.
+      fields.bits_.SXL = superEnabled_ ? 2 : 0;
+      fields.bits_.UXL = userEnabled_ ? 2 : 0;
     }
 
   return fields.value_;
@@ -4546,6 +4643,16 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
 	  mnf.bits_.NMIE = 1;  // Attempt to clear mnstatus.nmie has no effect
 	  value = mnf.value_;
 	}
+
+      // MNPP is encoded like MSTATUS.MPP: it holds only supported privilege modes.
+      using PM = PrivilegeMode;
+      auto mnpp = PM{mnf.bits_.MNPP};
+      if ((mnpp == PM::Supervisor and not superEnabled_) or mnpp == PM::Reserved)
+        mnpp = PM::User;
+      if (mnpp == PM::User and not userEnabled_)
+        mnpp = PM::Machine;
+      mnf.bits_.MNPP = unsigned(mnpp);
+      value = mnf.value_;
     }
   else if (num == CN::TSELECT)
     {
@@ -4569,7 +4676,10 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
 
       bool dte = menvcfgDte();
       enableSdt(dte); // MENVCFG.DTE off makes SDT and HENVCFG.DTE read-only zero.
+      updateVsstatusSdt();
     }
+  else if (num == CN::HENVCFG or num == CN::HENVCFGH)
+    updateVsstatusSdt();  // HENVCFG.DTE off makes VSSTATUS.SDT read-only zero.
   else if ((num >= CN::MHPMEVENT3 and num <= CN::MHPMEVENT31) or
            (num >= CN::MHPMEVENT3H and num <= CN::MHPMEVENT31H))
     {
@@ -5354,7 +5464,7 @@ CsRegs<URV>::defineMachineRegs()
 
   defineCsr("mncause", Csrn::MNCAUSE, !mand, !imp, 0, wam, wam);
 
-  mask = 0b1100010001000;  // Fields MNPP, MNPV, and NMIE writeable.
+  mask = 0b1101010001000;  // Fields MNPP, MNPELP, MNPV, and NMIE writeable.
   defineCsr("mnstatus", Csrn::MNSTATUS, !mand, !imp, 0b0000, mask, pokeMask);
 
   // Define mhpmcounter3/mhpmcounter3h to mhpmcounter31/mhpmcounter31h
@@ -6037,9 +6147,11 @@ CsRegs<URV>::defineAiaRegs()
   csr = defineCsr("vstopi",     CN::VSTOPI,     !mand, !imp, 0, wam, wam);
   csr->setHypervisor(true); csr->markAia(true);
 
+  // High halves (interrupts 32-63). No interrupt above 31 is implemented: midelegh,
+  // mvienh and hvienh are read-only zero, so sieh/siph and vsieh/vsiph must be too.
   if (sizeof(URV) == 4)
     {
-      csr = defineCsr("midelegh", CN::MIDELEGH, !mand, !imp, 0, wam, wam);
+      csr = defineCsr("midelegh", CN::MIDELEGH, !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::MIDELEGH, CN::MIDELEG);
       csr->markAia(true);
 
@@ -6047,7 +6159,7 @@ CsRegs<URV>::defineAiaRegs()
       markHighLowPair(CN::MIEH, CN::MIE);
       csr->markAia(true);
 
-      csr = defineCsr("mvienh",   CN::MVIENH,   !mand, !imp, 0, wam, wam);
+      csr = defineCsr("mvienh",   CN::MVIENH,   !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::MVIENH, CN::MVIEN);
       csr->markAia(true);
 
@@ -6059,12 +6171,12 @@ CsRegs<URV>::defineAiaRegs()
       markHighLowPair(CN::MIPH, CN::MIP);
       csr->markAia(true);
 
-      csr = defineCsr("sieh",     CN::SIEH,     !mand, !imp, 0, wam, wam);
+      csr = defineCsr("sieh",     CN::SIEH,     !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::SIEH, CN::SIE);
       csr->markAia(true);
       csr->setMapsToVirtual(true);
 
-      csr = defineCsr("siph",     CN::SIPH,     !mand, !imp, 0, wam, wam);
+      csr = defineCsr("siph",     CN::SIPH,     !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::SIPH, CN::SIP);
       csr->markAia(true);
       csr->setMapsToVirtual(true);
@@ -6073,7 +6185,7 @@ CsRegs<URV>::defineAiaRegs()
       markHighLowPair(CN::HIDELEGH, CN::HIDELEG);
       csr->markAia(true);
 
-      csr = defineCsr("hvienh",   CN::HVIENH,   !mand, !imp, 0, wam, wam);
+      csr = defineCsr("hvienh",   CN::HVIENH,   !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::HVIENH, CN::HVIEN);
       csr->markAia(true);
       csr->setHypervisor(true);
@@ -6092,11 +6204,11 @@ CsRegs<URV>::defineAiaRegs()
       csr->markAia(true);
       csr->setHypervisor(true);
 
-      csr = defineCsr("vsieh",    CN::VSIEH,    !mand, !imp, 0, wam, wam);
+      csr = defineCsr("vsieh",    CN::VSIEH,    !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::VSIEH, CN::VSIE);
       csr->markAia(true);
 
-      csr = defineCsr("vsiph",    CN::VSIPH,    !mand, !imp, 0, wam, wam);
+      csr = defineCsr("vsiph",    CN::VSIPH,    !mand, !imp, 0, 0, 0);
       markHighLowPair(CN::VSIPH, CN::VSIP);
       csr->markAia(true);
     }
@@ -8696,7 +8808,7 @@ CsRegs<URV>::isStateEnabled(CsrNumber num, PrivilegeMode pm, bool vm) const
 
   // Determine controlling *STATEEN* CSR number.
   CN ccsrn = CN::MSTATEEN0, ccsrnh = CN::MSTATEEN0H;
-  if (pm == PrivilegeMode::User)
+  if (pm == PrivilegeMode::User and superEnabled_)  // Without S, mstateen controls U.
     ccsrn = CN::SSTATEEN0;
   else if (vm)
     {
@@ -8982,6 +9094,27 @@ CsRegs<URV>::isImsicSelectStrict(URV sel) const
 
 template <typename URV>
 void
+CsRegs<URV>::updateGuestInterruptMasks()
+{
+  using CN = CsrNumber;
+
+  // Only bits GEILEN:1 of HGEIE and HGEIP are implemented.
+  unsigned xlen = sizeof(URV) * 8;
+  unsigned geilen = geilen_ < xlen ? geilen_ : xlen - 1;
+  URV mask = geilen ? (~URV(0) >> (xlen - 1 - geilen)) & ~URV(1) : 0;
+
+  auto& hgeie = regs_.at(size_t(CN::HGEIE));
+  hgeie.setWriteMask(mask);
+  hgeie.setPokeMask(mask);
+
+  auto& hgeip = regs_.at(size_t(CN::HGEIP));
+  hgeip.setWriteMask(0);
+  hgeip.setPokeMask(mask);
+}
+
+
+template <typename URV>
+void
 CsRegs<URV>::setDefaultMasks(const Isa& isa)
 {
   using RVE = RvExtension;
@@ -9022,7 +9155,48 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       csr->setPokeMask(csr->getPokeMask() & ~rozBits);
     }
 
+  // MHPMEVENT.SINH/UINH/VSINH/VUINH (MHPMEVENTH in RV32) are read-only zero for privilege
+  // modes that are not implemented (Sscofpmf).
+  if (isa.isEnabled(RVE::Sscofpmf))
+    {
+      bool s = isa.isEnabled(RVE::S), u = isa.isEnabled(RVE::U), h = isa.isEnabled(RVE::H);
+      MhpmeventFields inh{0};
+      inh.bits_.SINH = not s;
+      inh.bits_.UINH = not u;
+      inh.bits_.VSINH = not (h and s);
+      inh.bits_.VUINH = not (h and u);
+      URV roz = rv32_ ? URV(inh.value_ >> 32) : URV(inh.value_);
+      for (unsigned i = 0; i < 29; ++i)
+        {
+          auto& csr = regs_.at(size_t(advance(rv32_ ? CN::MHPMEVENT3H : CN::MHPMEVENT3, i)));
+          csr.setWriteMask(csr.getWriteMask() & ~roz);
+          csr.setPokeMask(csr.getPokeMask() & ~roz);
+        }
+    }
+
   bool super = isa.isEnabled(RVE::S);
+  bool user = isa.isEnabled(RVE::U);
+
+  // MSTATUS fields of S-mode, U-mode, and the vector extension are read-only zero if
+  // those are not implemented (machine.adoc §mstatus).
+  {
+    MstatusFields<URV> roz{0};
+    if (not super)
+      {
+        roz.bits_.SIE = roz.bits_.SPIE = roz.bits_.SPP = 1;
+        roz.bits_.SUM = roz.bits_.MXR = roz.bits_.TVM = roz.bits_.TSR = 1;
+      }
+    if (not user)
+      roz.bits_.MPRV = 1;
+    if (not super and not user)
+      roz.bits_.TW = 1;
+    if (not super and not isa.isEnabled(RVE::V))
+      roz.bits_.VS = 3;
+    auto& mstatus = regs_.at(size_t(CN::MSTATUS));
+    mstatus.setWriteMask(mstatus.getWriteMask() & ~roz.value_);
+    mstatus.setPokeMask(mstatus.getPokeMask() & ~roz.value_);
+  }
+
   // SBE (bit 4 of MSTATUSH in RV32) is read-only zero
   if (rv32_)
     {
@@ -9086,6 +9260,14 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       mask = mstatus.getPokeMask();
       mask = zicfilp ? (mask | mpelp) : (mask & ~mpelp);
       mstatus.setPokeMask(mask);
+
+      // MSTATUS.SXL/UXL are read-only zero if S/U is not implemented.
+      MstatusFields<URV> mf{mstatus.getResetValue()};
+      if (not isa.isEnabled(RVE::S))
+        mf.bits_.SXL = 0;
+      if (not isa.isEnabled(RVE::U))
+        mf.bits_.UXL = 0;
+      mstatus.setInitialValue(mf.value_);
     }
 
   // MSTATUS.SDT (bit 24 in both rv32 and rv64) pokeable or read-only-zero depending on
@@ -9141,6 +9323,28 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       menvcfg.setPokeMask(mask);
     }
 
+  // MENVCFG/SENVCFG/HENVCFG.CBIE/CBCFE read-only-zero without Zicbom, CBZE read-only-zero
+  // without Zicboz.
+  URV cboBits = 0;
+  if (not isa.isEnabled(RVE::Zicbom))
+    cboBits |= 0x70;  // CBIE (bits 5:4) and CBCFE (bit 6).
+  if (not isa.isEnabled(RVE::Zicboz))
+    cboBits |= 0x80;  // CBZE (bit 7).
+  for (auto csrn : { CN::MENVCFG, CN::SENVCFG, CN::HENVCFG } )
+    {
+      auto& cfg = regs_.at(size_t(csrn));
+      cfg.setPokeMask(cfg.getPokeMask() & ~cboBits);
+    }
+
+  // MNSTATUS.MNPV read-only-zero without H, MNSTATUS.MNPELP read-only-zero without Zicfilp.
+  {
+    MnstatusFields mnf{0};
+    mnf.bits_.MNPV = not isa.isEnabled(RVE::H);
+    mnf.bits_.MNPELP = not zicfilp;
+    auto& mnstatus = regs_.at(size_t(CN::MNSTATUS));
+    mnstatus.setPokeMask(mnstatus.getPokeMask() & ~URV(mnf.value_));
+  }
+
   // SSTATUS.SDT
   auto& sstatus = regs_.at(size_t(CN::SSTATUS));
   URV sdtBit = URV(1) << 24;
@@ -9180,18 +9384,7 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
     }
 
   // Configure guest interrupts in HGEIE and HGEIP
-  // Only bits GEILEN:1 of HGEIE and HGEIP are implemented.
-  unsigned xlen = sizeof(URV) * 8;
-  unsigned geilen = geilen_ < xlen ? geilen_ : xlen - 1;
-  mask = geilen ? (~URV(0) >> (xlen - 1 - geilen)) & ~URV(1) : 0;
-
-  auto& hgeie = regs_.at(size_t(CN::HGEIE));
-  hgeie.setWriteMask(mask);
-  hgeie.setPokeMask(mask);
-
-  auto& hgeip = regs_.at(size_t(CN::HGEIP));
-  hgeip.setWriteMask(0);
-  hgeip.setPokeMask(mask);
+  updateGuestInterruptMasks();
 
   auto& mstatus = regs_.at(size_t(CN::MSTATUS));
   bool mSpelp = MstatusFields<URV>(mstatus.getPokeMask()).bits_.SPELP;
@@ -9204,6 +9397,7 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
   auto& vsstatus = regs_.at(size_t(CN::VSSTATUS));
   MstatusFields<URV> vsf{vsstatus.getPokeMask()};
   vsf.bits_.SPELP = isa.isEnabled(RVE::H) and zicfilp;
+  vsf.bits_.SDT = isa.isEnabled(RVE::H) and sdbltrp;  // VSSTATUS.SDT pokeable with Ssdbltrp.
   vsstatus.setPokeMask(vsf.value_);
 
   // Bit 1 of MTVEC is pokeable if either SMIJT is enabled.

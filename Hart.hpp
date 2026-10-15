@@ -491,6 +491,12 @@ namespace WdRiscv
     void enableMtip(bool flag)
     { mtipEnabled_ = flag; markTimerStale(); }
 
+    /// Enable delivery of STIP interrupt from the stimecmp comparator (Sstc).
+    /// Test-bench will disable this and poke MIP.STIP to deliver supervisor
+    /// timer interrupts.
+    void enableStip(bool flag)
+    { stipEnabled_ = flag; markTimerStale(); }
+
     /// Enable support for ebreak semi-hosting.  See ebreak documentation in the
     /// unprivileged spec.
     void enableSemihosting(bool flag)
@@ -1517,7 +1523,7 @@ namespace WdRiscv
 
     /// Enable/disable the c (compressed) extension.
     void enableRvc(bool flag)
-    { enableExtension(RvExtension::C, flag); csRegs_.enableRvc(flag); }
+    { enableExtension(RvExtension::C, flag); }
 
     /// Enable/disable the f (floating point) extension.
     void enableRvf(bool flag);
@@ -3411,6 +3417,19 @@ namespace WdRiscv
     void enableBabylonPma(bool flag)
     { bbl_ = flag; pmaMgr_.enableBabylon(flag); }
 
+    /// Return the number of bytes per vector register specified by the Zvl* extensions.
+    /// If more tha one Zvl* extension is present rturn largest numer. If none, return 0.
+    uint32_t isaVecBytesPerReg() const
+    {
+      if (isa_.isEnabled(RvExtension::Zvl1024b)) return 128;
+      if (isa_.isEnabled(RvExtension::Zvl512b))  return 64;
+      if (isa_.isEnabled(RvExtension::Zvl256b))  return 32;
+      if (isa_.isEnabled(RvExtension::Zvl128b))  return 16;
+      if (isa_.isEnabled(RvExtension::Zvl64b))   return 8;
+      if (isa_.isEnabled(RvExtension::Zvl32b))   return 4;
+      return 0;
+    }
+
   protected:
 
     /// Support memory consistency model (MCM) instruction cache. Read 2 bytes from the
@@ -3788,7 +3807,7 @@ namespace WdRiscv
     /// VTYPE.ALTFMT or float16 if not) instruction.
     bool isHalfFpLegal() const
     {
-      bool extEnabled = vecRegs_.altfmt() ? isRvzvfbfa() : isRvzfh();
+      bool extEnabled = vecRegs_.altfmt() ? isRvzvfbfa() : isRvzvfh();
       return isRvf() and isRvv() and isFpEnabled() and extEnabled;
     }
 
@@ -6991,6 +7010,7 @@ namespace WdRiscv
     bool mipPoked_ = false;          // Prevent MIP pokes from being clobbered by CLINT.
     bool seiPin_ = false;            // Supervisor external interrupt pin value.
     bool mtipEnabled_ = true;
+    bool stipEnabled_ = true;
     unsigned mxlen_ = 8*sizeof(URV);
     util::file::SharedFile consoleOut_ = nullptr;
 

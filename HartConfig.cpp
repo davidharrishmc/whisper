@@ -393,6 +393,11 @@ applyCsrConfig(Hart<URV>& hart, std::string_view nm, const nlohmann::json& conf,
       return false;
     }
 
+  // Remember an explicit "exists": true: it keeps an optional CSR (e.g. mcounteren
+  // without U-mode) that would otherwise not be implemented.
+  if (conf.contains("exists") and exists)
+    csr->setUserEnabled(true);
+
   if (conf.contains("privilege_mode"))
     {
       std::string val = conf.at("privilege_mode").get<std::string>();
@@ -401,7 +406,7 @@ applyCsrConfig(Hart<URV>& hart, std::string_view nm, const nlohmann::json& conf,
         pm = PrivilegeMode::Machine;
       else if (val == "s" or val == "supervisor")
         pm = PrivilegeMode::Supervisor;
-      else if (val == "s" or val == "user")
+      else if (val == "u" or val == "user")
         pm = PrivilegeMode::User;
       else
         {
@@ -640,6 +645,14 @@ applyPerfEventMap(Hart<URV>& hart, const nlohmann::json& config)
 	  continue;
 	}
 
+      if (value == 0 and eventId != EventNumber::None)
+	{
+	  std::cerr << "Error: Event number 0 (no event) cannot be associated with event "
+		    << eventName << " in mmode_perf_event_map in config file.\n";
+	  errors++;
+	  continue;
+	}
+
       if (eventNumbers.contains(value))
 	{
 	  std::cerr << "Error: Event number " << value << " associaged with more than one event in mmode_perf_event_map in config file.\n";
@@ -826,6 +839,7 @@ bool
 applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
 {
   using namespace std::string_view_literals;
+  using std::cerr;
 
   if (not config.contains("vector"))
     return true;  // Nothing to apply
@@ -837,7 +851,7 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
   std::string_view tag = "bytes_per_vec";
   if (not vconf.contains(tag))
     {
-      std::cerr << "Error: Missing " << tag << " tag in vector section of config file\n";
+      cerr << "Error: Missing " << tag << " tag in vector section of config file\n";
       errors++;
     }
   else
@@ -846,16 +860,23 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         errors++;
       else if (bytesPerVec == 0 or bytesPerVec > 4096)
         {
-          std::cerr << "Error: Invalid config file bytes_per_vec number: "
-                    << bytesPerVec << '\n';
+          cerr << "Error: Invalid config file bytes_per_vec number: "
+               << bytesPerVec << '\n';
           errors++;
         }
       else if (not isPowerOf2(bytesPerVec))
 	{
-	  std::cerr << "Error: Config file bytes_per_vec ("
-		    << bytesPerVec << ") is not a power of 2\n";
+	  cerr << "Error: Config file bytes_per_vec ("
+               << bytesPerVec << ") is not a power of 2\n";
 	  errors++;
 	}
+      else if (bytesPerVec < hart.isaVecBytesPerReg())
+        {
+          cerr << "Error: Config file bytes_per_vec (" << bytesPerVec << ") is less"
+               << " that that required by the isa string ("
+               << hart.isaVecBytesPerReg() << ")\n";
+          errors++;
+        }
     }
 
   std::vector<unsigned> bytesPerElem = { 1, 1 };
@@ -894,6 +915,20 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
           else
 	    bytesPerElem.at(ix) = bytes;
         }
+    }
+
+  // SEW=8 is always supported and SEW above 64 is reserved.
+  if (bytesPerElem.at(0) != 1)
+    {
+      std::cerr << "Error: Config file min_bytes_per_elem (" << bytesPerElem.at(0)
+                << ") must be 1\n";
+      errors++;
+    }
+  if (bytesPerElem.at(1) > 8)
+    {
+      std::cerr << "Error: Config file max_bytes_per_elem (" << bytesPerElem.at(1)
+                << ") must not be larger than 8\n";
+      errors++;
     }
 
   std::unordered_map<GroupMultiplier, unsigned> minBytesPerLmul;
@@ -2222,7 +2257,8 @@ HartConfig::applyFrameBufferConfig(System<URV>& system) const
 
 template<typename URV>
 bool
-HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
+HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose,
+                        std::string_view effectiveIsa) const
 {
   using std::cerr;
   unsigned errors = 0;
@@ -2393,9 +2429,11 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
 	cerr << "Warning: Config file tag \"" << etag << "\" is no longer supported.\n";
     }
 
-  // Counter overflow: sscofpmf extension
-  std::string isa;
-  bool cof = getIsa(isa) and isa.find("sscofpmf") != std::string::npos;
+  // Counter overflow: sscofpmf extension. Use the isa in effect if given.
+  std::string isa{effectiveIsa};
+  if (isa.empty())
+    getIsa(isa);
+  bool cof = isa.find("sscofpmf") != std::string::npos;
 
   tag = "enable_counter_overflow";
   if (config_ ->contains(tag))
@@ -2586,8 +2624,24 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
   if (config_ -> contains(tag))
     {
       uint64_t size = 0;
-      if (getJsonUnsigned<uint64_t>(tag, config_ -> at(tag), size))
+      if (not getJsonUnsigned<uint64_t>(tag, config_ -> at(tag), size))
+        errors++;
+      else if (size >= sizeof(URV)*8)
+        {
+          std::cerr << "Error: Config file " << tag << " (" << size << ") must be less than XLEN.\n";
+          errors++;
+        }
+      else
         hart.configGuestInterruptCount(size);
+    }
+  else if (config_ -> contains("imsic") and config_ -> at("imsic").contains("guests"))
+    {
+      // Unless guest_interrupt_count sets it, a hart's GEILEN is its number of guest
+      // interrupt files. This must be done here (before configIsa/setDefaultMasks) because
+      // the HGEIE/HGEIP masks are derived from GEILEN and are not changed afterwards.
+      uint64_t guests = 0;
+      if (getJsonUnsigned<uint64_t>("imsic.guests", config_ -> at("imsic").at("guests"), guests))
+        hart.configGuestInterruptCount(guests);
       else
         errors++;
     }
@@ -2898,6 +2952,20 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
 	      atmErrors++;
 	      continue;
 	    }
+	  using VM = VirtMem::Mode;
+	  bool legal = mode == VM::Bare;
+	  if constexpr (sizeof(URV) == 4)
+	    legal = legal or mode == VM::Sv32;
+	  else
+	    legal = legal or mode == VM::Sv39 or mode == VM::Sv48 or mode == VM::Sv57;
+	  if (not legal)
+	    {
+              if (hart0)
+                cerr << "Error: Address translation mode " << modeStr << " in config file "
+                     << tag << " is not supported for XLEN=" << sizeof(URV)*8 << '\n';
+	      atmErrors++;
+	      continue;
+	    }
 	  modes.push_back(mode);
 	}
       if (std::find(modes.begin(), modes.end(), VirtMem::Mode::Bare) == modes.end())
@@ -2905,6 +2973,24 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
           if (hart0)
             cerr << "Warning: Bare mode missing in config file address_translation_modes -- adding it\n";
 	  modes.push_back(VirtMem::Mode::Bare);
+	}
+      auto has = [&modes](VirtMem::Mode m) {
+        return std::find(modes.begin(), modes.end(), m) != modes.end();
+      };
+      // Sv48 requires Sv39 and Sv57 requires Sv48.
+      if (has(VirtMem::Mode::Sv48) and not has(VirtMem::Mode::Sv39))
+	{
+          if (hart0)
+            cerr << "Error: Address translation mode sv48 in config file " << tag
+                 << " requires sv39\n";
+	  atmErrors++;
+	}
+      if (has(VirtMem::Mode::Sv57) and not has(VirtMem::Mode::Sv48))
+	{
+          if (hart0)
+            cerr << "Error: Address translation mode sv57 in config file " << tag
+                 << " requires sv48\n";
+	  atmErrors++;
 	}
       if (not atmErrors)
 	hart.configAddressTranslationModes(modes);
@@ -3153,6 +3239,14 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
       bool flag = false;
       getJsonBoolean(tag, config_->at(tag), flag) or errors++;
       hart.enableMtip(flag);
+    }
+
+  tag = "enable_stip";
+  if (config_->contains(tag))
+    {
+      bool flag = false;
+      getJsonBoolean(tag, config_->at(tag), flag) or errors++;
+      hart.enableStip(flag);
     }
 
   return errors == 0;
@@ -3421,10 +3515,13 @@ HartConfig::applyImsicConfig(System<URV>& system) const
 	      return false;
 	    }
 	}
-      unsigned tm = 0;
-      if (not getJsonUnsigned("imsic.eithreshold_mask", imsic.at(tag), tm))
-	return false;
-      std::fill(tmVec.begin(), tmVec.end(), tm);
+      else
+	{
+	  unsigned tm = 0;
+	  if (not getJsonUnsigned("imsic.eithreshold_mask", imsic.at(tag), tm))
+	    return false;
+	  std::fill(tmVec.begin(), tmVec.end(), tm);
+	}
     }
 
   bool maplic = false;    // Machine file supports aplic
@@ -3480,7 +3577,8 @@ HartConfig::applyPciConfig(System<URV>& system) const
 
 template<typename URV>
 bool
-HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose) const
+HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose,
+                        std::string_view isa) const
 {
   userMode = userMode or this->userModeEnabled();
 
@@ -3488,7 +3586,7 @@ HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose) const
   for (unsigned i = 0; i < system.hartCount(); ++i)
     {
       Hart<URV>& hart = *system.ithHart(i);
-      if (not applyConfig(hart, userMode, verbose))
+      if (not applyConfig(hart, userMode, verbose, isa))
 	return false;
 
       if (not applyClintConfig(system, hart))
@@ -3954,16 +4052,16 @@ HartConfig::hasCsrConfig(std::string_view csrName) const
 // Instantiate tempate member functions
 
 template bool
-HartConfig::applyConfig<uint32_t>(Hart<uint32_t>&, bool, bool) const;
+HartConfig::applyConfig<uint32_t>(Hart<uint32_t>&, bool, bool, std::string_view) const;
 
 template bool
-HartConfig::applyConfig<uint64_t>(Hart<uint64_t>&, bool, bool) const;
+HartConfig::applyConfig<uint64_t>(Hart<uint64_t>&, bool, bool, std::string_view) const;
 
 template bool
-HartConfig::configHarts<uint32_t>(System<uint32_t>&, bool, bool) const;
+HartConfig::configHarts<uint32_t>(System<uint32_t>&, bool, bool, std::string_view) const;
 
 template bool
-HartConfig::configHarts<uint64_t>(System<uint64_t>&, bool, bool) const;
+HartConfig::configHarts<uint64_t>(System<uint64_t>&, bool, bool, std::string_view) const;
 
 template bool
 HartConfig::configMemory(System<uint32_t>&, bool) const;
