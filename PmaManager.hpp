@@ -936,8 +936,19 @@ namespace WdRiscv
     /// masked starting address of the region.
     void setAddressMask(unsigned ix, uint64_t mask)
     {
+      if (not addressMasksOn_)
+        return;
       auto& region = regions_.at(ix);
       region.addrMask_ = mask;
+      onRegionsChanged();
+    }
+
+    void enableAddressMasks(bool flag)
+    {
+      addressMasksOn_ = flag;
+      if (not flag)
+        for (unsigned i = 0; i < regions_.size(); ++i)
+          regions_.at(i).addrMask_ = ~uint64_t(0);
       onRegionsChanged();
     }
 
@@ -1470,6 +1481,7 @@ namespace WdRiscv
     AccessReason reason_{};
 
     bool bbl_ = false;                   // True if Babylon version of the PMA spec.
+    bool addressMasksOn_ = true;         // For test-bench to disable masking.
 
     MmRegs local_;
     MmRegs* mmRegs_ = &local_;

@@ -4573,6 +4573,9 @@ Hart<URV>::syncPmamgrToPmacfg()
       uint64_t mask = 0, low = 0, high = 0;
       if (pmaMgr_.unpackPmacfg(cfgVal, low, high, mask, pma))
         pmaMgr_.setRegionPma(i, pma);
+
+      auto maskNum = csRegs_.advance(CN::PMAMASK0, i);
+      processPmamaskChange(maskNum);
     }
 
   URV savedSel = 0;  // Previous value of MISELECT.
@@ -4599,6 +4602,8 @@ Hart<URV>::syncPmamgrToPmacfg()
       uint64_t mask = 0, low = 0, high = 0;
       if (pmaMgr_.unpackPmacfg(cfgVal, low, high, mask, pma))
         pmaMgr_.setRegionPma(i, pma);
+
+      processPmamaskChange(CN::MIREG2);
     }
 
   if (not pokeCsr(CN::MISELECT, savedSel, false))
@@ -4905,9 +4910,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
     updateCachedVsstatus();
 
   // On RV32, mstatus_ caches mstatush:mstatus, so compare both halves.
-  bool mstatusChanged = csRegs_.peekMstatus() != URV(mstatus_.value());
-  if constexpr (sizeof(URV) == 4)
-    mstatusChanged = mstatusChanged or peekCsr(CN::MSTATUSH) != mstatus_.value_.high_;
+  bool mstatusChanged = csRegs_.read64(CN::MSTATUS) != mstatus_.value();
 
   if (mstatusChanged or csr == CN::MSTATUSH)
     {
@@ -4926,7 +4929,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
           writeMstatus();
         }
       csRegs_.recordWrite(CN::MSTATUS);
-  }
+    }
 
   if (isRvh() and csRegs_.peekHstatus() != hstatus_.value())
     {
