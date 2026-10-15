@@ -1093,13 +1093,15 @@ namespace WdRiscv
 
     /// Set the hit bit of every exception-trigger (etrigger) that matches. Return true if
     /// one of them has the "raise breakpoint" or "enter debug mode" action, and set
-    /// enterDebug if one has the latter.
-    bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool interruptEnabled,
-                       bool& enterDebug);
+    /// enterDebug if one has the latter. The mode/virtMode are those the trap was taken
+    /// from; handlerMode is the mode it was taken into, where the trigger fires.
+    bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
+                       PrivilegeMode handlerMode, bool interruptEnabled, bool& enterDebug);
 
     /// Same as expTriggerHit but for the interrupt-triggers (itrigger).
-    bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool interruptEnabled,
-                       bool& enterDebug, bool isNmi);
+    bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
+                       PrivilegeMode handlerMode, bool interruptEnabled, bool& enterDebug,
+                       bool isNmi);
 
     /// Return the tigger at the given index. Reurn None if index is out of bounds.
     TriggerType triggerType(URV trigger) const

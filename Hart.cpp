@@ -3952,11 +3952,11 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
     {
       bool fire = false, enterDebug = false;
       if (interrupt)
-	fire = csRegs_.intTriggerHit(cause, origMode, origVirtMode, isBreakpInterruptEnabled(),
-				     enterDebug);
+	fire = csRegs_.intTriggerHit(cause, origMode, origVirtMode, privMode_,
+				     isBreakpInterruptEnabled(), enterDebug);
       else if (cause != URV(ExceptionCause::BREAKP))
-	fire = csRegs_.expTriggerHit(cause, origMode, origVirtMode, isBreakpInterruptEnabled(),
-				     enterDebug);
+	fire = csRegs_.expTriggerHit(cause, origMode, origVirtMode, privMode_,
+				     isBreakpInterruptEnabled(), enterDebug);
 
       if (enterDebug)
 	enterDebugMode_(DebugModeCause::TRIGGER, pc_);
@@ -4324,8 +4324,8 @@ Hart<URV>::initiateNmi(URV cause, URV pcToSave, bool isDoubleTrap)
   if (hasActiveTrigger())
     {
       bool isNmi = true, enterDebug = false;
-      bool fire = csRegs_.intTriggerHit(cause, origMode, origVirt, isBreakpInterruptEnabled(),
-                                        enterDebug, isNmi);
+      bool fire = csRegs_.intTriggerHit(cause, origMode, origVirt, privMode_,
+                                        isBreakpInterruptEnabled(), enterDebug, isNmi);
       if (enterDebug)
         enterDebugMode_(DebugModeCause::TRIGGER, pc_);
       else if (fire)
