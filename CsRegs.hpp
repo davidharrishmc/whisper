@@ -1370,10 +1370,11 @@ namespace WdRiscv
 
     /// Same as Triggers::intTriggerHit, and record the TDATA1 change of the selected
     /// trigger.
-    bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool ie,
-                       bool& enterDebug, bool isNmi = false)
+    bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
+                       bool ie, bool& enterDebug, bool isNmi = false)
     {
-      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, ie, enterDebug, isNmi);
+      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie, enterDebug,
+                                          isNmi);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1381,9 +1382,10 @@ namespace WdRiscv
     }
 
     /// Same as intTriggerHit but for exception triggers.
-    bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool ie, bool& enterDebug)
+    bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
+                       bool ie, bool& enterDebug)
     {
-      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, ie, enterDebug);
+      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie, enterDebug);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.

@@ -506,13 +506,16 @@ Triggers<URV>::evaluateIcount(PrivilegeMode mode, bool virtMode, bool interruptE
 
 template <typename URV>
 bool
-Triggers<URV>::expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool interruptEnabled,
+Triggers<URV>::expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
+                             PrivilegeMode handlerMode, bool interruptEnabled,
                              bool& enterDebug)
 {
-  // Check if we should skip tripping because of reentrant behavior. 
+  // Check if we should skip tripping because of reentrant behavior. The trigger fires
+  // just before the first instruction of the trap handler, so tcontrol.mte applies when
+  // the trap is taken into machine mode.
   bool skip = not interruptEnabled;
   if (tcontrolEnabled_)
-    skip = mode == PrivilegeMode::Machine and not mmodeEnabled_;
+    skip = handlerMode == PrivilegeMode::Machine and not mmodeEnabled_;
 
   URV mask = URV(1) << cause;
 
@@ -571,13 +574,16 @@ Triggers<URV>::expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool 
 
 template <typename URV>
 bool
-Triggers<URV>::intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, bool interruptEnabled,
+Triggers<URV>::intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
+                             PrivilegeMode handlerMode, bool interruptEnabled,
                              bool& enterDebug, bool isNmi)
 {
-  // Check if we should skip tripping because of reentrant behavior. 
+  // Check if we should skip tripping because of reentrant behavior. The trigger fires
+  // just before the first instruction of the trap handler, so tcontrol.mte applies when
+  // the trap is taken into machine mode.
   bool skip = not interruptEnabled;
   if (tcontrolEnabled_)
-    skip = mode == PrivilegeMode::Machine and not mmodeEnabled_;
+    skip = handlerMode == PrivilegeMode::Machine and not mmodeEnabled_;
 
   cause = (cause << 1) >> 1;  // Clear most sig bit.
 
