@@ -202,9 +202,13 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
       hart.enableNewlib(newlib);
       hart.enableLinux(linux);
       hart.enableSemihosting(semihost);
+
+      /// If we want user defined CSR masks to over-ride CsRegs::setDefaultMasks,
+      /// The following should be in HartConfig::configHarts.
       if (not isa.empty())
 	if (not hart.configIsa(isa, updateMisa))
 	  return false;
+
       hart.reset();
       hart.filterMachineInterrupts(args.verbose);
       // hart.filterSupervisorInterrupts(args.verbose);

@@ -3582,10 +3582,23 @@ HartConfig::configHarts(System<URV>& system, bool userMode, bool verbose,
 {
   userMode = userMode or this->userModeEnabled();
 
+#if 0
+  // If the MISA CSR is not configured by the user, then auto configure it to match the
+  // ISA string.
+  bool updateMisa = not hasCsrConfig("misa");
+#endif
+
   // Apply JSON configuration to each hart.
   for (unsigned i = 0; i < system.hartCount(); ++i)
     {
       Hart<URV>& hart = *system.ithHart(i);
+
+#if 0
+      if (not isa.empty())
+	if (not hart.configIsa(isa, updateMisa))
+	  return false;
+#endif
+
       if (not applyConfig(hart, userMode, verbose, isa))
 	return false;
 
