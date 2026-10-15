@@ -1276,6 +1276,10 @@ namespace WdRiscv
     void enableTcontrol(bool flag)
     { tcontrolEnabled_ = flag; }
 
+    /// Return true if TCONTROL controls firing of triggers in machine mode.
+    bool isTcontrolEnabled() const
+    { return tcontrolEnabled_; }
+
     /// Return true if given trigger type is supported.
     bool isSupportedType(TriggerType type) const
     {

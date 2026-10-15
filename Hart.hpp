@@ -414,7 +414,7 @@ namespace WdRiscv
 
     /// Enable use of TCONTROL CSR to control triggers firing in machine mode.
     void configTriggerUseTcontrol(bool flag)
-    { csRegs_.triggers_.enableTcontrol(flag); }
+    { csRegs_.enableTcontrol(flag); }
 
     /// Set the maximum NAPOT range with maskmax.
     void configTriggerNapotMaskMax(unsigned bits)
