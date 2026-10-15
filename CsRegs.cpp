@@ -9323,6 +9323,19 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
       menvcfg.setPokeMask(mask);
     }
 
+  // MENVCFG/SENVCFG/HENVCFG.CBIE/CBCFE read-only-zero without Zicbom, CBZE read-only-zero
+  // without Zicboz.
+  URV cboBits = 0;
+  if (not isa.isEnabled(RVE::Zicbom))
+    cboBits |= 0x70;  // CBIE (bits 5:4) and CBCFE (bit 6).
+  if (not isa.isEnabled(RVE::Zicboz))
+    cboBits |= 0x80;  // CBZE (bit 7).
+  for (auto csrn : { CN::MENVCFG, CN::SENVCFG, CN::HENVCFG } )
+    {
+      auto& cfg = regs_.at(size_t(csrn));
+      cfg.setPokeMask(cfg.getPokeMask() & ~cboBits);
+    }
+
   // MNSTATUS.MNPV read-only-zero without H, MNSTATUS.MNPELP read-only-zero without Zicfilp.
   {
     MnstatusFields mnf{0};
