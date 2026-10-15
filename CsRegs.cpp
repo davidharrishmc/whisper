@@ -4361,6 +4361,21 @@ CsRegs<URV>::enableSdtrig(bool flag)
   enableCsr(CN::HCONTEXT, flag and superEnabled_ and hyperEnabled_);
   updateMscontext();
   updateHcontext();
+  updateMedelegBreakpoint();
+}
+
+
+template <typename URV>
+void
+CsRegs<URV>::updateMedelegBreakpoint()
+{
+  auto csr = findCsr(CsrNumber::MEDELEG);
+  if (not csr)
+    return;
+  URV bit = URV(1) << URV(ExceptionCause::BREAKP);
+  bool roz = sdtrigOn_ and triggers_.isTcontrolEnabled();
+  auto mask = csr->getReadMask();
+  csr->setReadMask(roz ? (mask & ~bit) : (mask | bit));
 }
 
 

@@ -1276,6 +1276,17 @@ namespace WdRiscv
     /// Enable triggers.
     void enableSdtrig(bool flag);
 
+    /// Enable use of TCONTROL to control firing of triggers in machine mode.
+    void enableTcontrol(bool flag)
+    {
+      triggers_.enableTcontrol(flag);
+      updateMedelegBreakpoint();
+    }
+
+    /// With TCONTROL (Sdtrig reentrancy option 2), bit 3 (breakpoint) of MEDELEG is
+    /// read-only zero.
+    void updateMedelegBreakpoint();
+
     /// When true, mscontext (0x7aa) is an alias of scontext (debug spec 5.7.10).
     /// It is implemented only while scontext is implemented, and is accessible from
     /// S/HS, M, and Debug mode, but not from VS or VU.
