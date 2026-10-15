@@ -5245,58 +5245,50 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
 
       Csr<URV>* csr = this->findCsr("misa");
       if (not csr)
-	return false;
+        return false;
 
       // MXL is 1 for RV32 and 2 for RV64.
       URV misaReset = URV(sizeof(URV) == 4 ? 1 : 2) << (sizeof(URV)*8 - 2);
-      if (isa_.isEnabled(RvExtension::A))
-	misaReset |= URV(1);
-      if (isa_.isEnabled(RvExtension::B))
-	misaReset |= URV(2);
-      if (isa_.isEnabled(RvExtension::C))
-	misaReset |= URV(4);
-      if (isa_.isEnabled(RvExtension::D))
-	misaReset |= URV(8);
-      if (isa_.isEnabled(RvExtension::E))
-        misaReset |= URV(16);
-      else
-        misaReset |= URV(1) << ('I' - 'A');
-      if (isa_.isEnabled(RvExtension::F))
-	misaReset |= URV(1) << ('F' - 'A');
-      if (isa_.isEnabled(RvExtension::H))
-	misaReset |= URV(1) << ('H' - 'A');
-      if (isa_.isEnabled(RvExtension::M))
-	misaReset |= URV(1) << ('M' - 'A');
-      if (isa_.isEnabled(RvExtension::S))
-	misaReset |= URV(1) << ('S' - 'A');
-      if (isa_.isEnabled(RvExtension::U))
-	misaReset |= URV(1) << ('U' - 'A');
-      if (isa_.isEnabled(RvExtension::V))
-	misaReset |= URV(1) << ('V' - 'A');
+
+      if (isa_.isEnabled(RvExtension::A))       misaReset |= URV(1) << ('A' - 'A');
+      if (isa_.isEnabled(RvExtension::B))       misaReset |= URV(1) << ('B' - 'A');
+      if (isa_.isEnabled(RvExtension::C))       misaReset |= URV(1) << ('C' - 'A');
+      if (isa_.isEnabled(RvExtension::D))       misaReset |= URV(1) << ('D' - 'A');
+      if (isa_.isEnabled(RvExtension::F))       misaReset |= URV(1) << ('F' - 'A');
+      if (isa_.isEnabled(RvExtension::H))       misaReset |= URV(1) << ('H' - 'A');
+      if (isa_.isEnabled(RvExtension::M))       misaReset |= URV(1) << ('M' - 'A');
+      if (isa_.isEnabled(RvExtension::S))       misaReset |= URV(1) << ('S' - 'A');
+      if (isa_.isEnabled(RvExtension::U))       misaReset |= URV(1) << ('U' - 'A');
+      if (isa_.isEnabled(RvExtension::V))       misaReset |= URV(1) << ('V' - 'A');
+
+      if (isa_.isEnabled(RvExtension::E))       misaReset |= URV(1) << ('E' - 'A');
+      else                                      misaReset |= URV(1) << ('I' - 'A');
 
       URV mask = 0, pokeMask = 0;
       bool implemented = true;
 
       if (not this->configCsr("misa", implemented, misaReset, mask, pokeMask))
-	return false;
+        return false;
     }
 
   // Za64rs: reservation sets are at most 64 bytes.
   if (isa_.isEnabled(RvExtension::Za64rs) and lrResSize_ > 64)
     {
       std::cerr << "Error: Config file reservation_bytes (" << lrResSize_
-		<< ") must not be larger than 64 with extension Za64rs\n";
+                << ") must not be larger than 64 with extension Za64rs\n";
       return false;
+    }
+
   // The hypervisor extension requires Sv32 on RV32 and at least Sv39 on RV64.
   if (isa_.isEnabled(RvExtension::H))
     {
       auto mode = rv64_ ? VirtMem::Mode::Sv39 : VirtMem::Mode::Sv32;
       if (not virtMem_.isModeSupported(mode))
-	{
-	  std::cerr << "Error: Extension H requires address translation mode "
-		    << (rv64_ ? "sv39" : "sv32") << '\n';
-	  return false;
-	}
+        {
+          std::cerr << "Error: Extension H requires address translation mode "
+                    << (rv64_ ? "sv39" : "sv32") << '\n';
+          return false;
+        }
     }
 
   // Change the default values of the poke (implemened bits) and write masks of the CSRs
