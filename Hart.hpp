@@ -2703,6 +2703,11 @@ namespace WdRiscv
     void forceRoundingMode(RoundingMode mode)
     { forcedRounding_ = mode; forceRounding_ = true; }
 
+    /// When flag is true, an instruction that may set floating point exception flags
+    /// marks MSTATUS.FS dirty even if it sets none.
+    void enableFsDirtyWithoutFlags(bool flag)
+    { fsDirtyWithoutFlags_ = flag; }
+
     /// Enable logging in CSV (comma separated values) format.
     void enableCsvLog(bool flag)
     { csvTrace_ = flag; }
@@ -3860,6 +3865,12 @@ namespace WdRiscv
 
     // Mark FS field of mstatus as dirty.
     void markFsDirty();
+
+    void markFsDirtyWithoutFlags()
+    {
+      if (fsDirtyWithoutFlags_)
+        markFsDirty();
+    }
 
     // Return true if VS field of mstatus is not off.
     bool isVecEnabled() const
@@ -6815,6 +6826,7 @@ namespace WdRiscv
 
     bool forceRounding_ = false;
     RoundingMode forcedRounding_ = RoundingMode::NearestEven;
+    bool fsDirtyWithoutFlags_ = false;
 
     static constexpr bool rv64_ = sizeof(URV)==8; // True if 64-bit base (RV64I).
     std::bitset<static_cast<size_t>(RvExtension::None)> ext_enabled_;

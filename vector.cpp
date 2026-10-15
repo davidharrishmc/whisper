@@ -632,10 +632,34 @@ Hart<URV>::vsetvl(unsigned rd, unsigned rs1, URV vtypeVal, bool vli /* vsetvli i
 }
 
 
+static bool
+mayRaiseVecFpFlags(const DecodedInst* di)
+{
+  if (not di->isVectorFp() or di->isVectorLoad() or di->isVectorStore())
+    return false;
+
+  using enum InstId;
+  switch (di->instId())
+    {
+    case vfsgnj_vv: case vfsgnj_vf: case vfsgnjn_vv: case vfsgnjn_vf:
+    case vfsgnjx_vv: case vfsgnjx_vf:
+    case vfmerge_vfm: case vfmv_v_f: case vfmv_s_f: case vfmv_f_s:
+    case vfclass_v:
+    case vfslide1up_vf: case vfslide1down_vf:
+      return false;
+    default:
+      return true;
+    }
+}
+
+
 template <typename URV>
 void
 Hart<URV>::postVecSuccess(const DecodedInst* di)
 {
+  if (mayRaiseVecFpFlags(di))
+    markFsDirtyWithoutFlags();
+
   bool dirty = false;  // True if MSTATUS.VS should be marked dirty.
 
   if (vecRegs_.getLastWrittenReg() >= 0)
