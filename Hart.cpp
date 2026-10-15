@@ -4573,6 +4573,9 @@ Hart<URV>::syncPmamgrToPmacfg()
       uint64_t mask = 0, low = 0, high = 0;
       if (pmaMgr_.unpackPmacfg(cfgVal, low, high, mask, pma))
         pmaMgr_.setRegionPma(i, pma);
+
+      auto maskNum = csRegs_.advance(CN::PMAMASK0, i);
+      processPmamaskChange(maskNum);
     }
 
   URV savedSel = 0;  // Previous value of MISELECT.
@@ -4599,6 +4602,8 @@ Hart<URV>::syncPmamgrToPmacfg()
       uint64_t mask = 0, low = 0, high = 0;
       if (pmaMgr_.unpackPmacfg(cfgVal, low, high, mask, pma))
         pmaMgr_.setRegionPma(i, pma);
+
+      processPmamaskChange(CN::MIREG2);
     }
 
   if (not pokeCsr(CN::MISELECT, savedSel, false))

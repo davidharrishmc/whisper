@@ -2376,6 +2376,15 @@ namespace WdRiscv
     void enableClearTinstOnLrSc(bool flag)
     { clearTinstOnLrSc_ = flag; }
 
+    /// Enable the functionality of the PMAMASK CSRs. Default is true. When disabled the
+    /// CSRs can still be read/written but their values will have no effect on the PMA
+    /// regions.
+    void enablePmamasks(bool flag)
+    {
+      pmaMgr_.enableAddressMasks(flag);
+      syncPmamgrToPmacfg();  // Re-compute the masks from the PMAMASK* CSRs.
+    }
+
     /// Enable/disable clearing of reservation set after xRET
     void enableCancelLrOnTrap(bool flag)
     { cancelLrOnTrap_ = flag; }
