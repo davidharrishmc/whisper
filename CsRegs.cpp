@@ -4017,17 +4017,22 @@ CsRegs<URV>::writeMseccfg(CsrNumber num, URV value, bool recordWr)
 
 template <typename URV>
 bool
-CsRegs<URV>::writeMtopei()
+CsRegs<URV>::writeMtopei(bool record)
 {
-  if (aclic_) {
-    // Write to MTOPEI claims the top interrupt: clears its pending bit if possible.
-    // Level1/Level0 sources are unaffected (pending is driven by the hardware level).
-    // Use ignoreThreshold=true so the claim works regardless of mithreshold.
-    unsigned id = aclic_->topInterrupt(true, nullptr, /*ignoreThreshold=*/true);
-    if (id)
-      aclic_->tryClearPending(/*isMachine=*/true, id);
-    return true;
-  }
+  if (aclic_)
+    {
+      // Write to MTOPEI claims the top interrupt: clears its pending bit if possible.
+      // Level1/Level0 sources are unaffected (pending is driven by the hardware level).
+      // Use ignoreThreshold=true so the claim works regardless of mithreshold.
+      unsigned id = aclic_->topInterrupt(true, nullptr, /*ignoreThreshold=*/true);
+      if (id)
+        aclic_->tryClearPending(/*isMachine=*/true, id);
+
+      if (record)
+        recordWrite(CsrNumber::MTOPEI);
+
+      return true;
+    }
 
   if (not imsic_)
     return false;
@@ -4037,23 +4042,32 @@ CsRegs<URV>::writeMtopei()
   unsigned id = imsic_->machineTopId();
   if (id)
     imsic_->setMachinePending(id, false);
+
+  if (record)
+    recordWrite(CsrNumber::MTOPEI);
+
   return true;
 }
 
 
 template <typename URV>
 bool
-CsRegs<URV>::writeStopei()
+CsRegs<URV>::writeStopei(bool record)
 {
-  if (aclic_) {
-    // Write to STOPEI claims the top interrupt: clears its pending bit if possible.
-    // Level1/Level0 sources are unaffected (pending is driven by the hardware level).
-    // Use ignoreThreshold=true so the claim works regardless of sithreshold.
-    unsigned id = aclic_->topInterrupt(false, nullptr, /*ignoreThreshold=*/true);
-    if (id)
-      aclic_->tryClearPending(/*isMachine=*/false, id);
-    return true;
-  }
+  if (aclic_)
+    {
+      // Write to STOPEI claims the top interrupt: clears its pending bit if possible.
+      // Level1/Level0 sources are unaffected (pending is driven by the hardware level).
+      // Use ignoreThreshold=true so the claim works regardless of sithreshold.
+      unsigned id = aclic_->topInterrupt(false, nullptr, /*ignoreThreshold=*/true);
+      if (id)
+        aclic_->tryClearPending(/*isMachine=*/false, id);
+
+      if (record)
+        recordWrite(CsrNumber::STOPEI);
+
+      return true;
+    }
 
   if (not imsic_)
     return false;
@@ -4063,13 +4077,17 @@ CsRegs<URV>::writeStopei()
   unsigned id = imsic_->supervisorTopId();
   if (id)
     imsic_->setSupervisorPending(id, false);
+
+  if (record)
+    recordWrite(CsrNumber::STOPEI);
+
   return true;
 }
 
 
 template <typename URV>
 bool
-CsRegs<URV>::writeVstopei()
+CsRegs<URV>::writeVstopei(bool record)
 {
   if (not imsic_)
     return false;
@@ -4085,6 +4103,11 @@ CsRegs<URV>::writeVstopei()
   unsigned id = imsic_->guestTopId(vgein);
   if (id)
     imsic_->setGuestPending(vgein, id, false);
+
+  
+  if (record)
+    recordWrite(CsrNumber::VSTOPEI);
+
   return true;
 }
 
@@ -4553,20 +4576,14 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
   if (num == CN::VSIREG5)  return writeVsireg5(num, mode, virtMode_, value);
   if (num == CN::VSIREG6)  return writeVsireg6(num, mode, virtMode_, value);
 
-  if (num == CN::MSECCFG)
-    return writeMseccfg(num, value);
+  if (num == CN::MSECCFG)  return writeMseccfg(num, value);
 
-  if (num == CN::MTOPEI)
-    return writeMtopei();
-  if (num == CN::STOPEI)
-    return writeStopei();
-  if (num == CN::VSTOPEI)
-    return writeVstopei();
+  if (num == CN::MTOPEI)   return writeMtopei(true);
+  if (num == CN::STOPEI)   return writeStopei(true);
+  if (num == CN::VSTOPEI)  return writeVstopei(true);
 
-  if (num == CN::MTOPSI)
-    return writeTopsi(/*isMachine=*/true, value);
-  if (num == CN::STOPSI)
-    return writeTopsi(/*isMachine=*/false, value);
+  if (num == CN::MTOPSI)   return writeTopsi(/*isMachine=*/true, value);
+  if (num == CN::STOPSI)   return writeTopsi(/*isMachine=*/false, value);
 
   if (aclic_ and num == CN::MITHRESHOLD)
     {
@@ -6681,20 +6698,14 @@ CsRegs<URV>::poke(CsrNumber num, URV value, bool virtMode)
   if (num == CN::VSIREG5)  return writeVsireg5(num, mode, virtMode_, value, false);
   if (num == CN::VSIREG6)  return writeVsireg6(num, mode, virtMode_, value, false);
 
-  if (num == CN::MSECCFG)
-    return writeMseccfg(num, value, false);
+  if (num == CN::MSECCFG)  return writeMseccfg(num, value, false);
 
-  if (num == CN::MTOPEI)
-    return writeMtopei();
-  if (num == CN::STOPEI)
-    return writeStopei();
-  if (num == CN::VSTOPEI)
-    return writeVstopei();
+  if (num == CN::MTOPEI)   return writeMtopei();
+  if (num == CN::STOPEI)   return writeStopei();
+  if (num == CN::VSTOPEI)  return writeVstopei();
 
-  if (num == CN::MTOPSI)
-    return writeTopsi(/*isMachine=*/true, value);
-  if (num == CN::STOPSI)
-    return writeTopsi(/*isMachine=*/false, value);
+  if (num == CN::MTOPSI)   return writeTopsi(/*isMachine=*/true, value);
+  if (num == CN::STOPSI)   return writeTopsi(/*isMachine=*/false, value);
 
   auto prev = peek(num);
 

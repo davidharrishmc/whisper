@@ -2139,13 +2139,13 @@ namespace WdRiscv
     bool writeMseccfg(CsrNumber num, URV value, bool recordWr = true);
 
     /// Helper to write method.
-    bool writeMtopei();
+    bool writeMtopei(bool record = false);
 
     /// Helper to write method.
-    bool writeStopei();
+    bool writeStopei(bool record = false);
 
     /// Helper to write method.
-    bool writeVstopei();
+    bool writeVstopei(bool record = false);
 
     /// Helper to read method.
     bool readMtopei();
