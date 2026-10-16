@@ -9136,6 +9136,11 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
   using CN = CsrNumber;
   using IC = InterruptCause;
 
+  std::vector<URV> priorPokeMasks;
+  priorPokeMasks.reserve(regs_.size());
+  for (const auto& csr : regs_)
+    priorPokeMasks.push_back(csr.getPokeMask());
+
   // Make VTYPE.ALTFMT writable if extension zvfbfa, zvfofp8min, zvfwbdota16bf, zvfqwbdota8f,
   // zvqwbdota8i, zvqwbdota16i, or zvfqwdota8f.
   bool altFmt = (isa.isEnabled(RVE::Zvfbfa) or isa.isEnabled(RVE::Zvfofp8min) or
@@ -9427,6 +9432,16 @@ CsRegs<URV>::setDefaultMasks(const Isa& isa)
     {
       auto& stvec = regs_.at(size_t(CN::STVEC));
       stvec.setPokeMask(stvec.getPokeMask() | 0x2);
+    }
+
+  // Bits made read-only above are also removed from the write mask so that the reported
+  // write mask (e.g. to a co-simulation bridge) matches the effective write behavior.
+  for (size_t ix = 0; ix < regs_.size(); ++ix)
+    {
+      auto& csr = regs_.at(ix);
+      URV cleared = priorPokeMasks.at(ix) & ~csr.getPokeMask();
+      if (cleared)
+        csr.setWriteMask(csr.getWriteMask() & ~cleared);
     }
 }
 
