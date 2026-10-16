@@ -894,6 +894,13 @@ Mcm<URV>::setProducerTime(const Hart<URV>& hart, McmInstr& instr)
 	  instr.ixProdTimes_.at(active++) = McmInstr::VecProdTime{ixReg, producer, time};
         }
     }
+
+  if (di.instId() == InstId::cbo_zero)
+    {
+      unsigned addrReg = effectiveRegIx(di, 0);  // Addr reg is operand 0 of instr.
+      instr.addrProducer_ = regProducer.at(addrReg);
+      instr.addrTime_ = regTime.at(addrReg);
+    }
 }
 
 
@@ -1203,13 +1210,23 @@ Mcm<URV>::retireCmo(Hart<URV>& hart, McmInstr& instrB)
 
   if (id == InstId::cbo_zero)
     {
+      setProducerTime(hart, instrB);
+
       instrB.isStore_ = true;  // To enable forwarding
       instrB.complete_ = checkStoreComplete(hartIx, instrB);
       if (instrB.complete_)
         {
           undrained.erase(instrB.tag_);
+          bool result = true;
           if (isEnabled(PpoRule::R1))
-	    return ppoRule1(hart, instrB);
+            result = ppoRule1(hart, instrB) and result;
+          if (isEnabled(PpoRule::R4))
+            result = ppoRule4(hart, instrB) and result;
+          if (isEnabled(PpoRule::R5))
+            result = ppoRule5(hart, instrB) and result;
+          if (isEnabled(PpoRule::R9))
+            result = ppoRule9(hart, instrB) and result;
+          return result;
         }
       else
         undrained.insert(instrB.tag_);
