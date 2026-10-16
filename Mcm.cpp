@@ -1211,13 +1211,18 @@ Mcm<URV>::retireCmo(Hart<URV>& hart, McmInstr& instrB)
   if (id == InstId::cbo_zero)
     {
       setProducerTime(hart, instrB);
-
       instrB.isStore_ = true;  // To enable forwarding
       instrB.complete_ = checkStoreComplete(hartIx, instrB);
-      if (instrB.complete_)
+
+      bool result = true;
+      if (not instrB.complete_)
+        {
+          undrained.insert(instrB.tag_);
+        }
+      else
         {
           undrained.erase(instrB.tag_);
-          bool result = true;
+
           if (isEnabled(PpoRule::R1))
             result = ppoRule1(hart, instrB) and result;
           if (isEnabled(PpoRule::R4))
@@ -1226,20 +1231,15 @@ Mcm<URV>::retireCmo(Hart<URV>& hart, McmInstr& instrB)
             result = ppoRule5(hart, instrB) and result;
           if (isEnabled(PpoRule::R9))
             result = ppoRule9(hart, instrB) and result;
-          return result;
         }
-      else
-        undrained.insert(instrB.tag_);
-    }
-  else
-    {
-      // cbo.clean/flush/inval must complete before retire.
-      instrB.complete_ = checkStoreComplete(hartIx, instrB);
-      if (not instrB.complete_)
-        std::cerr << "Warning: hart-id=" << hart.hartId() << " tag=" << instrB.tag_
-                  << " CMO instruction retires before it is complete (no bypass op seen)\n";
+      return result;
     }
 
+  // cbo.clean/flush/inval must complete before retire.
+  instrB.complete_ = checkStoreComplete(hartIx, instrB);
+  if (not instrB.complete_)
+    std::cerr << "Warning: hart-id=" << hart.hartId() << " tag=" << instrB.tag_
+              << " CMO instruction retires before it is complete (no bypass op seen)\n";
   return true;
 }
 
