@@ -1142,29 +1142,7 @@ Trigger<URV>::matchLdStAddr(URV addr, unsigned size, TriggerTiming timing, bool 
 
       auto match = Match(data1_.mcontrol_.match_);
       if (matchAllDataAddresses(match))
-	{
-	  // Match all addresses covered by size.
-	  bool negated = isNegatedMatch(match);
-	  if (negated)
-	    match = negateNegatedMatch(match);
-
-	  bool hit = false;
-          uint64_t ha = addr;   // Hit address
-          for (unsigned i = 0; i < size; ++i, ++ha)
-            {
-              hit = doMatch(ha, match);
-              if (hit)
-                break;
-            }
-
-	  if (negated)
-	    hit = not hit;
-
-          if (hit)
-            hitAddr = ha;
-
-          return hit;
-        }
+        return doMatchAllAddresses(addr, size, match, hitAddr);
 
       // Match first ld/st data address.
       auto hit = doMatch(addr, match);
@@ -1314,6 +1292,28 @@ Trigger<URV>::doMatch(URV item, Match match) const
 
 
 template <typename URV>
+bool
+Trigger<URV>::doMatchAllAddresses(URV addr, unsigned size, Match match, URV& hitAddr) const
+{
+  bool negated = isNegatedMatch(match);
+  if (negated)
+    match = negateNegatedMatch(match);
+
+  for (unsigned i = 0; i < size; ++i)
+    if (doMatch(addr + i, match))
+      {
+        if (not negated)
+          hitAddr = addr + i;
+        return not negated;
+      }
+
+  if (negated)
+    hitAddr = addr;
+  return negated;
+}
+
+
+template <typename URV>
 template <typename M>
 bool
 Trigger<URV>::matchInstAddr(URV addr, unsigned size, TriggerTiming timing, PrivilegeMode mode,
@@ -1385,29 +1385,7 @@ Trigger<URV>::matchInstAddr(URV addr, unsigned size, TriggerTiming timing, Privi
 
       auto match = Match(data1_.mcontrol_.match_);
       if (matchAllInstrAddresses(match))
-        {
-	  // Match all addresses covered by size.
-	  bool negated = isNegatedMatch(match);
-	  if (negated)
-	    match = negateNegatedMatch(match);
-
-	  bool hit = false;
-          URV ha = addr;   // Hit address
-          for (unsigned i = 0; i < size; ++i, ++ha)
-            {
-              hit = doMatch(ha, match);
-              if (hit)
-                break;
-            }
-
-	  if (negated)
-	    hit = not hit;
-
-          if (hit)
-            hitAddr = ha;
-
-          return hit;
-        }
+        return doMatchAllAddresses(addr, size, match, hitAddr);
 
       // Match first instruction address.
       auto hit = doMatch(addr, match);

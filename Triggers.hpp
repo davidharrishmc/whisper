@@ -932,6 +932,10 @@ namespace WdRiscv
     bool matchAllInstrAddresses(Match match) const
     { return matchAllInstrAddr_ >> unsigned(match) & 1; }
 
+    /// Perform a match on the size addresses starting at addr. On a hit, set hitAddr to
+    /// the lowest address that matches, or to addr if the match is negated.
+    bool doMatchAllAddresses(URV addr, unsigned size, Match match, URV& hitAddr) const;
+
 
   private:
 
