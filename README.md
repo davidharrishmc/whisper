@@ -836,6 +836,17 @@ an illegal instruction exception in debug mode. Default is false, which
 executes them as in machine mode. The debug spec leaves their behavior in
 debug mode unspecified.
 
+### fs_dirty_without_flags
+When true, an executed instruction that may set floating point exception flags
+marks the floating point state (MSTATUS.FS, and VSSTATUS.FS in virtual mode)
+dirty even if it sets no flag: the floating point compare instructions, the
+floating point to integer conversions, and every vector floating point
+instruction except the sign injections, vfmerge/vfmv, vfclass and the slide1
+instructions. Every other instruction that can set a flag writes a floating
+point register, which already marks the state dirty. The privileged spec allows
+an instruction that does not modify the state to make it dirty. Default is
+false: such an instruction marks the state dirty only if it sets a flag.
+
 ###  physical_memory_protection_grain
 Defines the physical memory protection (PMP) grain size in bytes. This must be a
 power of 2 and be greater than 2. The G value is log base 2 of the size minus 2.

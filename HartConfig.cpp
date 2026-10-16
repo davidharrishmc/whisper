@@ -2899,6 +2899,15 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose,
         hart.enableDebugModeXretIllegal(flag);
     }
 
+  tag = "fs_dirty_without_flags";
+  if (config_ -> contains(tag))
+    {
+      if (not getJsonBoolean(tag, config_ -> at(tag), flag))
+        errors++;
+      else
+        hart.enableFsDirtyWithoutFlags(flag);
+    }
+
   tag = "trace_pmp";
   if (config_ -> contains(tag))
     {
