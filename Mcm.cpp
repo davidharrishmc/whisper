@@ -4554,6 +4554,14 @@ Mcm<URV>::ppoRule5(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
   if (not instrB.isLoad_)
     return false;
 
+  if (instrB.isStore_)
+    for (auto opIx : instrB.memOps_)
+      {
+        auto wop = sysMemOps_.at(opIx);
+        if (not wop.isRead_ and wop.time_ <= timeA)
+          return false;
+      }
+
   for (size_t ix = sysMemOps_.size(); ix != 0; ix--)
     {
       const auto& op = sysMemOps_.at(ix-1);
