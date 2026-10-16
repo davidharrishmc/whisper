@@ -1305,9 +1305,11 @@ Trigger<URV>::doMatch(URV item, Match match) const
     return false;
   };
 
-  if (match >= Match::Equal and match <= Match::MaskLowEqualHigh)
-    return helper(item, data2, match);
-      return not helper(item, data2, Match(uint32_t(match) - 8));
+  if (isReservedMatch(match))
+    return false;
+  if (isNegatedMatch(match))
+    return not helper(item, data2, negateNegatedMatch(match));
+  return helper(item, data2, match);
 }
 
 
