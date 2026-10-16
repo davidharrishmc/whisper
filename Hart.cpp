@@ -1198,7 +1198,7 @@ namespace WdRiscv
   Hart<uint64_t>::updateCachedMstatus()
   {
     uint64_t csrVal = csRegs_.peekMstatus();
-    mstatus_.value_ = csrVal;
+    mstatus_.value64_ = csrVal;
 
     virtMem_.setExecReadable(mstatus_.bits_.MXR);
     virtMem_.setStage1ExecReadable(mstatus_.bits_.MXR);
@@ -1228,7 +1228,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::writeMstatus()
   {
-    csRegs_.write(CsrNumber::MSTATUS, PrivilegeMode::Machine, mstatus_.value_);
+    csRegs_.write(CsrNumber::MSTATUS, PrivilegeMode::Machine, mstatus_.value64_);
     updateCachedMstatus();
   }
 
@@ -12442,194 +12442,93 @@ Hart<URV>::execSfence_inval_ir(const DecodedInst* di)
 }
 
 
-namespace WdRiscv
+template <typename URV>
+void
+Hart<URV>::execMret(const DecodedInst* di)
 {
-
-  template <>
-  void
-  Hart<uint64_t>::execMret(const DecodedInst* di)
-  {
-    if (privMode_ < PrivilegeMode::Machine or (debugMode_ and debugModeXretIllegal_))
-      {
-	illegalInst(di);
-	return;
-      }
-
-    if (breakpOrEnterDebugTripped())
-      return;
-
-    if (sdtrigOn_)
-      csRegs_.restoreTcontrolMte();
-
-    // 1. Restore privilege mode, interrupt enable, and virtual mode.
-    uint64_t value = csRegs_.peekMstatus();
-
-    MstatusFields<uint64_t> fields(value);
-    auto savedMode = PrivilegeMode(fields.bits_.MPP);
-    bool savedVirt = fields.bits_.MPV;
-
-    // 1.1 Restore MIE.
-    fields.bits_.MIE = fields.bits_.MPIE;
-
-    // 1.1. Set MPP to the least privileged mode available.
-    if (isRvu())
-      fields.bits_.MPP = unsigned(PrivilegeMode::User);
-    else if (isRvs())
-      fields.bits_.MPP = unsigned(PrivilegeMode::Supervisor);
-    else
-      fields.bits_.MPP = unsigned(PrivilegeMode::Machine);
-
-    // 1.2. Set MPIE.
-    fields.bits_.MPIE = 1;
-
-    // 1.3. Clear MPRV.
-    if (savedMode != PrivilegeMode::Machine)
-      fields.bits_.MPRV = 0;
-
-    // 1.4. Clear virtual (V) mode.
-    fields.bits_.MPV = 0;
-
-    // 1.5. Restore ELP.
-    if (isRvZicfilp())
-      {
-        setElp(isLandingPadEnabled(savedMode, savedVirt)? fields.bits_.MPELP : false);
-        fields.bits_.MPELP = false;
-      }
-
-    // 1.6. Smdbltrp: MRET clears MDT (spec machine.html line 1409-1411:
-    // "The MRET and SRET instructions, when executed in M-mode, set the
-    //  MDT bit to 0.")
-    if (isRvsmdbltrp())
-      fields.bits_.MDT = 0;
-
-    // 1.6b. Ssdbltrp: MRET to U-mode (or VS/VU in H-mode) clears sstatus.SDT.
-    // Spec supervisor.adoc: "When MRET or SRET are executed in M-mode and the
-    // new privilege mode is U, VS, or VU, sstatus.SDT is also set to 0."
-    if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
-      fields.bits_.SDT = 0;
-
-    // 1.7. Write back MSTATUS.
-    if (not csRegs_.write(CsrNumber::MSTATUS, privMode_, fields.value_))
-      assert(0 and "Failed to write MSTATUS register\n");
-    updateCachedMstatus();
-
-    // Smnip: on mret, restore mithreshold from mistatus.pithreshprio (9-bit, [16:8]).
-    if (extensionIsEnabled(RvExtension::Smnip) and aclic_ and aclic_->isMnipEnabled())
-      {
-        uint64_t misVal = 0;
-        [[maybe_unused]] bool ok = csRegs_.peek(CsrNumber::MISTATUS, misVal);
-        assert(ok);
-        auto pithresh = static_cast<uint16_t>((misVal >> 8) & 0x1FF);
-        aclic_->setMithreshold(pithresh);
-        csRegs_.poke(CsrNumber::MITHRESHOLD, uint64_t(aclic_->getMithreshold()));
-      }
-
-    // 2. Restore program counter from MEPC.
-    uint64_t epc = 0;
-    if (not csRegs_.readSignExtend(CsrNumber::MEPC, privMode_, epc))
-      assert(0 && "Error: Assertion failed");
-    setPc(epc);
-
-    // 3. Update virtual mode.
-    if (savedMode != PrivilegeMode::Machine)
-      setVirtualMode(savedVirt);
-
-    // 4. Update privilege mode.
-    setPrivilegeMode(savedMode);
-  }
-
-
-  // SV32 version of execMret has to contend with MSTATUSH.
-  template <>
-  void
-  Hart<uint32_t>::execMret(const DecodedInst* di)
-  {
-    if (privMode_ < PrivilegeMode::Machine or (debugMode_ and debugModeXretIllegal_))
-      {
-	illegalInst(di);
-	return;
-      }
-
-    if (breakpOrEnterDebugTripped())
-      return;
-
-    if (sdtrigOn_)
-      csRegs_.restoreTcontrolMte();
-
-    // 1. Restore privilege mode, interrupt enable, and virtual mode.
-    uint32_t value = csRegs_.peekMstatus();
-    uint32_t hvalue = peekCsr(CsrNumber::MSTATUSH);
-    bool savedVirt = (hvalue >> 7) & 1;
-
-    MstatusFields<uint32_t> fields(value);
-    auto savedMode = PrivilegeMode(fields.bits_.MPP);
-    fields.bits_.MIE = fields.bits_.MPIE;
-
-    // 1.1. Set MPP to the least privileged mode available.
-    if (isRvu())
-      fields.bits_.MPP = unsigned(PrivilegeMode::User);
-    else if (isRvs())
-      fields.bits_.MPP = unsigned(PrivilegeMode::Supervisor);
-    else
-      fields.bits_.MPP = unsigned(PrivilegeMode::Machine);
-
-    // 1.2. Enable interrupts.
-    fields.bits_.MPIE = 1;
-
-    // 1.3. Clear MPRV.
-    if (savedMode != PrivilegeMode::Machine)
-      fields.bits_.MPRV = 0;
-
-    // 1.4. Clear virtual (V) mode.
-    hvalue &= ~ uint32_t(1 << 7);
-
-    // 1.5. Restore ELP.
-    if (isRvZicfilp())
-      {
-        setElp(isLandingPadEnabled(savedMode, savedVirt)? ((hvalue >> 9) & 1) : false);
-        hvalue &= ~ uint32_t(1 << 9);
-      }
-
-    // 1.6. Smdbltrp: MRET clears MDT (spec machine.html line 1409-1411).
-    // For RV32, MDT is bit 10 of mstatush (bit 42 overall = 42 - 32 = 10).
-    if (isRvsmdbltrp())
-      hvalue &= ~ uint32_t(1 << 10);
-
-    // 1.6b. Ssdbltrp: MRET to U, VS, or VU clears sstatus.SDT (machine.html line 1409-1411).
-    if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
-      fields.bits_.SDT = 0;
-
-    // 1.7. Write back MSTATUS.
-    if (not csRegs_.write(CsrNumber::MSTATUS, privMode_, fields.value_))
-      assert(0 and "Failed to write MSTATUS register\n");
-    if (not csRegs_.write(CsrNumber::MSTATUSH, privMode_, hvalue))
-      assert(0 and "Failed to write MSTATUSH register\n");
-    updateCachedMstatus();
-
-    // Smnip: on mret, restore mithreshold from mistatus.pithreshprio (9-bit, [16:8]).
-    if (extensionIsEnabled(RvExtension::Smnip) and aclic_ and aclic_->isMnipEnabled())
-      {
-        uint32_t misVal = 0;
-        [[maybe_unused]] bool ok = csRegs_.peek(CsrNumber::MISTATUS, misVal);
-        assert(ok);
-        auto pithresh = static_cast<uint16_t>((misVal >> 8) & 0x1FF);
-        aclic_->setMithreshold(pithresh);
-        csRegs_.poke(CsrNumber::MITHRESHOLD, uint32_t(aclic_->getMithreshold()));
-      }
-
-    // 2. Restore program counter from MEPC.
-    uint32_t epc = 0;
-    if (not csRegs_.read(CsrNumber::MEPC, privMode_, epc))
+  if (privMode_ < PrivilegeMode::Machine or (debugMode_ and debugModeXretIllegal_))
+    {
       illegalInst(di);
-    setPc(epc);
+      return;
+    }
 
-    // 3. Update virtual mode.
-    if (savedMode != PrivilegeMode::Machine)
-      setVirtualMode(savedVirt);
+  if (breakpOrEnterDebugTripped())
+    return;
 
-    // 4. Update privilege mode.
-    setPrivilegeMode(savedMode);
-  }
+  if (sdtrigOn_)
+    csRegs_.restoreTcontrolMte();
+
+  // 1. Restore privilege mode, interrupt enable, and virtual mode.
+  auto savedMode = PrivilegeMode(mstatus_.bits_.MPP);
+  bool savedVirt = mstatus_.bits_.MPV;
+
+  // 1.1 Restore MIE.
+  mstatus_.bits_.MIE = mstatus_.bits_.MPIE;
+
+  // 1.1. Set MPP to the least privileged mode available.
+  if (isRvu())
+    mstatus_.bits_.MPP = unsigned(PrivilegeMode::User);
+  else if (isRvs())
+    mstatus_.bits_.MPP = unsigned(PrivilegeMode::Supervisor);
+  else
+    mstatus_.bits_.MPP = unsigned(PrivilegeMode::Machine);
+
+  // 1.2. Set MPIE.
+  mstatus_.bits_.MPIE = 1;
+
+  // 1.3. Clear MPRV.
+  if (savedMode != PrivilegeMode::Machine)
+    mstatus_.bits_.MPRV = 0;
+
+  // 1.4. Clear virtual (V) mode.
+  mstatus_.bits_.MPV = 0;
+
+  // 1.5. Restore ELP.
+  if (isRvZicfilp())
+    {
+      setElp(isLandingPadEnabled(savedMode, savedVirt)? mstatus_.bits_.MPELP : false);
+      mstatus_.bits_.MPELP = false;
+    }
+
+  // 1.6. Smdbltrp: MRET clears MDT (spec machine.html line 1409-1411):
+  // "The MRET and SRET instructions, when executed in M-mode, set the
+  //  MDT bit to 0.")
+  if (isRvsmdbltrp())
+    mstatus_.bits_.MDT = 0;
+
+  // 1.6b. Ssdbltrp: MRET to U-mode (or VS/VU in H-mode) clears sstatus.SDT.
+  // Spec supervisor.adoc: "When MRET or SRET are executed in M-mode and the
+  // new privilege mode is U, VS, or VU, sstatus.SDT is also set to 0."
+  if (isRvssdbltrp() and (savedMode == PrivilegeMode::User or savedVirt))
+    mstatus_.bits_.SDT = 0;
+
+  // 1.7. Write back MSTATUS.
+  writeMstatus();
+  updateCachedMstatus();
+
+  // Smnip: on mret, restore mithreshold from mistatus.pithreshprio (9-bit, [16:8]).
+  if (extensionIsEnabled(RvExtension::Smnip) and aclic_ and aclic_->isMnipEnabled())
+    {
+      URV misVal = 0;
+      [[maybe_unused]] bool ok = csRegs_.peek(CsrNumber::MISTATUS, misVal);
+      assert(ok);
+      auto pithresh = static_cast<uint16_t>((misVal >> 8) & 0x1FF);
+      aclic_->setMithreshold(pithresh);
+      csRegs_.poke(CsrNumber::MITHRESHOLD, aclic_->getMithreshold());
+    }
+
+  // 2. Restore program counter from MEPC.
+  URV epc = 0;
+  if (not csRegs_.readSignExtend(CsrNumber::MEPC, privMode_, epc))
+    assert(0 && "Error: Assertion failed");
+  setPc(epc);
+
+  // 3. Update virtual mode.
+  if (savedMode != PrivilegeMode::Machine)
+    setVirtualMode(savedVirt);
+
+  // 4. Update privilege mode.
+  setPrivilegeMode(savedMode);
 }
 
 

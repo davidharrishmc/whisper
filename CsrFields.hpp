@@ -127,14 +127,10 @@ namespace WdRiscv
   template <>
   union Emstatus<uint32_t>
   {
-    Emstatus(uint32_t low = 0, uint32_t high = 0)
-      : value_{low, high}
-    { }
-
     uint64_t value() const
     { return value64_; }
 
-    uint64_t value64_;
+    uint64_t value64_ = 0;
 
     struct
     {
@@ -144,40 +140,40 @@ namespace WdRiscv
 
     struct
     {
-      unsigned UIE      : 1;
-      unsigned SIE      : 1;
-      unsigned res0     : 1;
-      unsigned MIE      : 1;
-      unsigned UPIE     : 1;
-      unsigned SPIE     : 1;
-      unsigned UBE      : 1;
-      unsigned MPIE     : 1;
-      unsigned SPP      : 1;
-      unsigned VS       : 2;
-      unsigned MPP      : 2;
-      unsigned FS       : 2;
-      unsigned XS       : 2;
-      unsigned MPRV     : 1;
-      unsigned SUM      : 1;
-      unsigned MXR      : 1;
-      unsigned TVM      : 1;
-      unsigned TW       : 1;
-      unsigned TSR      : 1;
-      unsigned SPELP    : 1;
-      unsigned SDT      : 1;  // bit 24: S-mode double trap (Ssdbltrp)
-      unsigned res1     : 6;  // bits 25-30 reserved
-      unsigned SD       : 1;
+      unsigned UIE      : 1;  // bit 0
+      unsigned SIE      : 1;  // bit 1
+      unsigned res0     : 1;  // bit 2
+      unsigned MIE      : 1;  // bit 3
+      unsigned UPIE     : 1;  // bit 4
+      unsigned SPIE     : 1;  // bit 5
+      unsigned UBE      : 1;  // bit 6
+      unsigned MPIE     : 1;  // bit 7
+      unsigned SPP      : 1;  // bit 8
+      unsigned VS       : 2;  // bit 9  10
+      unsigned MPP      : 2;  // bit 11 12
+      unsigned FS       : 2;  // bit 13 14
+      unsigned XS       : 2;  // bit 15 16
+      unsigned MPRV     : 1;  // bit 17
+      unsigned SUM      : 1;  // bit 18
+      unsigned MXR      : 1;  // bit 19
+      unsigned TVM      : 1;  // bit 20
+      unsigned TW       : 1;  // bit 21
+      unsigned TSR      : 1;  // bit 22
+      unsigned SPELP    : 1;  // bit 23
+      unsigned SDT      : 1;  // bit 24
+      unsigned res1     : 6;  // bit 25 to 30
+      unsigned SD       : 1;  // Reserved in rv64
 
       // mstatush
-      unsigned res2     : 4;
-      unsigned SBE      : 1;
-      unsigned MBE      : 1;
-      unsigned GVA      : 1;
-      unsigned MPV      : 1;
-      unsigned res3     : 1;
-      unsigned MPELP    : 1;
-      unsigned MDT      : 1;
-      unsigned res4     : 21;
+      unsigned res2     : 4;  // UXL and SXL in rv64
+      unsigned SBE      : 1;  // bit 36
+      unsigned MBE      : 1;  // bit 37
+      unsigned GVA      : 1;  // bit 38
+      unsigned MPV      : 1;  // bit 39
+      unsigned res3     : 1;  // bit 40
+      unsigned MPELP    : 1;  // bit 41
+      unsigned MDT      : 1;  // bit 42
+      unsigned res4     : 21; // bit 43 to 63
     } bits_;
   };
 
@@ -185,14 +181,10 @@ namespace WdRiscv
   template <>
   union Emstatus<uint64_t>
   {
-    Emstatus(uint32_t value = 0)
-      : value_(value)
-    { }
-
     uint64_t value() const
-    { return value_; }
+    { return value64_; }
 
-    uint64_t value_;
+    uint64_t value64_ = 0;
     Mstatus64 bits_;
   };
 
@@ -886,7 +878,7 @@ namespace WdRiscv
     uint32_t value_;   // SRMCFG register value.
     Srmcfg32 bits_;    // Bit fields.
   };
-    
+
 
   /// 32-bit version.
   template <>
