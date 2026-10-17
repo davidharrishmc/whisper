@@ -1138,8 +1138,11 @@ The action "raisebreak" cannot be excluded. Possible values that can be included
 ```
 
 ### trigger_napot_maskmax
-Define the number of maximum bits that the NAPOT mask can support. The maximum
-possible value of this number is 63 for an RV64 configuration.
+Define the number of maximum bits that the NAPOT mask can support (maskmax): the
+largest NAPOT range is 2^maskmax bytes. Legal values are 1 to 63 for RV64 (1 to 31
+for RV32), and the default is the largest. It is the value of the maskmax field of
+an mcontrol (type 2) trigger, and it decides how the tdata2 of an mcontrol6 NAPOT
+trigger is legalized.
 
 ### trigger_clear_unsupported_action
 Clear action field when written with reserved value. By default, prior value is

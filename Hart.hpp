@@ -416,9 +416,10 @@ namespace WdRiscv
     void configTriggerUseTcontrol(bool flag)
     { csRegs_.enableTcontrol(flag); }
 
-    /// Set the maximum NAPOT range with maskmax.
-    void configTriggerNapotMaskMax(unsigned bits)
-    { csRegs_.triggers_.configNapotMaskMax(bits); }
+    /// Set the maximum NAPOT range with maskmax. Return false if maskMax is not in 1 to
+    /// XLEN-1.
+    bool configTriggerNapotMaskMax(unsigned maskMax)
+    { return csRegs_.triggers_.configNapotMaskMax(maskMax); }
 
     /// WARL behavior of trigger action.
     void configTriggerClearUnsupportedAction(bool flag)
