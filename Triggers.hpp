@@ -379,6 +379,8 @@ namespace WdRiscv
 	{
 	  if (not data1_.dmode() and (data1_.mcontrol_.action_ == 1))
 	    data1_.mcontrol_.action_ = 0;
+          if (isReservedMatch(Match(data1_.mcontrol_.match_)))
+            data1_.mcontrol_.match_ = unsigned(Match::Equal);
           if (data1_.isMcontrol())
             data1_.mcontrol_.maskMax_ = std::countr_zero(napotMask_) + 1;
         }
@@ -834,12 +836,19 @@ namespace WdRiscv
 
     /// Return true if the given match type is negated: NotEqual, NotMasked, ...
     static bool isNegatedMatch(Match m)
-    { return m >= Match::NotEqual and m <= Match::NotMaskLowEqualHigh; }
+    {
+      return m == Match::NotEqual or m == Match::NotMasked or
+             m == Match::NotMaskHighEqualLow or m == Match::NotMaskLowEqualHigh;
+    }
+
+    /// Return true if the given match type is reserved (6, 7, 10, 11, 14 or 15).
+    static bool isReservedMatch(Match m)
+    { return m > Match::MaskLowEqualHigh and not isNegatedMatch(m); }
 
     /// Return the non-negated match corresponding to the given negated match m. For
     /// example, if m is NotEqual, this method returns Equal.
     static Match negateNegatedMatch(Match m)
-    { assert(isNegatedMatch); return Match(unsigned(m) - unsigned(Match::NotEqual)); }
+    { assert(isNegatedMatch(m)); return Match(unsigned(m) - unsigned(Match::NotEqual)); }
 
     void updateCompareMask()
     {
@@ -922,6 +931,10 @@ namespace WdRiscv
     /// Same as above for instruction (fetch) addresses.
     bool matchAllInstrAddresses(Match match) const
     { return matchAllInstrAddr_ >> unsigned(match) & 1; }
+
+    /// Perform a match on the size addresses starting at addr. On a hit, set hitAddr to
+    /// the lowest address that matches, or to addr if the match is negated.
+    bool doMatchAllAddresses(URV addr, unsigned size, Match match, URV& hitAddr) const;
 
 
   private:
