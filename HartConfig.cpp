@@ -2583,9 +2583,16 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose,
   tag = "trigger_napot_maskmax";
   if (config_ -> contains(tag))
     {
-      unsigned bits = 0;
-      getJsonUnsigned(tag, config_ -> at(tag), bits) or errors++;
-      hart.configTriggerNapotMaskMax(bits);
+      unsigned maskMax = 0;
+      if (not getJsonUnsigned(tag, config_ -> at(tag), maskMax))
+        errors++;
+      else if (not hart.configTriggerNapotMaskMax(maskMax))
+        {
+          if (hart0)
+            cerr << "Error: Invalid config file value for '" << tag << "': " << maskMax
+                 << " -- expecting 1 to " << (8*sizeof(URV) - 1) << '\n';
+          errors++;
+        }
     }
 
   tag = "trigger_clear_unsupported_action";
