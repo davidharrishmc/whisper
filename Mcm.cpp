@@ -3803,7 +3803,7 @@ Mcm<URV>::ppoRule1(unsigned hartId, const McmInstr& instrA, const MemoryOp& opA,
       if (instrB.memOps_.empty())
         return true;
 
-      auto& opB = sysMemOps_.at(instrB.memOps_.at(0));
+      const auto& opB = sysMemOps_.at(instrB.memOps_.at(0));
       uint64_t blow = lineNum(opB.pa_) * mergeBufferLineSize();
       uint64_t bhigh = blow + mergeBufferLineSize();
       if (acbom)
