@@ -380,7 +380,7 @@ namespace WdRiscv
 	  if (not data1_.dmode() and (data1_.mcontrol_.action_ == 1))
 	    data1_.mcontrol_.action_ = 0;
           if (data1_.isMcontrol())
-            data1_.mcontrol_.maskMax_ = std::countr_zero(napotMask_) + 1;
+            data1_.mcontrol_.maskMax_ = std::countr_one(napotMask_) + 1;
         }
       else if (data1_.isInstCount())
 	{
@@ -492,6 +492,8 @@ namespace WdRiscv
     void reset()
     {
       data1_.value_ = data1Reset_; data2_ = data2Reset_; data3_ = data3Reset_;
+      if (data1_.isMcontrol())
+        data1_.mcontrol_.maskMax_ = std::countr_one(napotMask_) + 1;
       writeData2(true, data2Reset_); // Define compare mask
     }
 
