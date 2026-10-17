@@ -1237,9 +1237,17 @@ Mcm<URV>::retireCmo(Hart<URV>& hart, McmInstr& instrB)
 
   // cbo.clean/flush/inval must complete before retire.
   instrB.complete_ = checkStoreComplete(hartIx, instrB);
-  if (not instrB.complete_)
-    std::cerr << "Warning: hart-id=" << hart.hartId() << " tag=" << instrB.tag_
-              << " CMO instruction retires before it is complete (no bypass op seen)\n";
+  if (instrB.complete_)
+    {
+      if (not checkCmo(hart, instrB))
+        return false;
+      if (isEnabled(PpoRule::R1))
+        return ppoRule1(hart, instrB);
+      return true;
+    }
+
+  std::cerr << "Warning: hart-id=" << hart.hartId() << " tag=" << instrB.tag_
+            << " CMO instruction retires before it is complete (no bypass op seen)\n";
   return true;
 }
 
@@ -3783,13 +3791,48 @@ Mcm<URV>::ppoRule1(unsigned hartId, const McmInstr& instrA, const MemoryOp& opA,
 
   assert(instrA.isRetired());
 
+  // Is A cbo.flush/inval/clean. If so, check B ops against whole line of A.
+  bool acbom = (instrA.di_.extension() == RvExtension::Zicbom);
+  uint64_t alow = lineNum(opA.pa_) * mergeBufferLineSize();
+  uint64_t ahigh = alow + mergeBufferLineSize();
+
+  // Is B cbo.flush/inval/clean.
+  bool bcbom = (instrB.di_.extension() == RvExtension::Zicbom);
+  if (bcbom)
+    {
+      if (instrB.memOps_.empty())
+        return true;
+
+      auto& opB = sysMemOps_.at(instrB.memOps_.at(0));
+      uint64_t blow = lineNum(opB.pa_) * mergeBufferLineSize();
+      uint64_t bhigh = blow + mergeBufferLineSize();
+      if (acbom)
+        {
+          if (alow != blow or opA.time_ < opB.time_)
+            return true;  // No overlap or in-order.
+          printPpo1Error(hartId, instrA.tag_, instrB.tag_, opA.time_, opB.time_, blow);
+          return false;
+        }
+
+      if (opA.pa_ + opA.size_ < blow  or opA.pa_ >= bhigh)
+        return true;
+
+      printPpo1Error(hartId, instrA.tag_, instrB.tag_, opA.time_, opB.time_, opA.pa_);
+      return false;
+    }
+
   // Check memory ops of B overlapping opA.
   for (unsigned i = 0; i < instrB.memOps_.size(); ++i)
     {
       auto opIx = instrB.memOps_.at(i);
       const auto& opB = sysMemOps_.at(opIx);
 
-      if (not opA.overlaps(opB))
+      if (acbom)
+        {
+          if (opB.pa_ + opB.size_ <= alow  or  opB.pa_ >= ahigh)
+            continue;
+        }
+      else if (not opA.overlaps(opB))
 	continue;
 
       uint64_t ta = opA.time_;
