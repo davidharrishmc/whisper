@@ -4148,6 +4148,11 @@ namespace WdRiscv
     ExceptionCause determineCboException(uint64_t& addr, uint64_t& gpa, uint64_t& pa,
 					 bool isZero);
 
+    /// Helper to the cache block operation (cbo) instructions: Match the store-address
+    /// triggers against the cache block holding the given pointer-masked address. Return
+    /// true if a trigger tripped with a breakpoint or enter-debug action.
+    bool cboTriggerTripped(uint64_t pmva);
+
     /// Helper to the shadow-stack instructions.
     ExceptionCause determineSsException(uint64_t& addr, uint64_t& gpa, uint64_t size,
                                         Pma::Attrib attrib);
@@ -4234,13 +4239,19 @@ namespace WdRiscv
     /// given address and given timing (before/after). Set the hit bit of all the triggers
     /// that trip. For pointer masking, addr should already be masked.
     bool ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming t, bool isLoad)
+    { return ldStAddrTriggerHit(addr, size, t, isLoad, not isLoad); }
+
+    /// Same as above for an access that is a load if isLoad is true and a store if
+    /// isStore is true. An AMO is both.
+    bool ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming t, bool isLoad,
+                            bool isStore)
     {
       if (lastDm_)
         return false;   // Triggers do not match/fire in debug mode.
 
       URV hitAddr = addr;
-      bool hit = csRegs_.ldStAddrTriggerHit(addr, size, t, isLoad, privilegeMode(), virtMode(),
-                                            isBreakpInterruptEnabled(), hitAddr);
+      bool hit = csRegs_.ldStAddrTriggerHit(addr, size, t, isLoad, isStore, privilegeMode(),
+                                            virtMode(), isBreakpInterruptEnabled(), hitAddr);
       if (hit)
         {
           triggerTripped_ = ldStTriggerTripped_ = true;

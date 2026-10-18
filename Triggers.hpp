@@ -542,12 +542,12 @@ namespace WdRiscv
     bool isEnterDebugOnHit() const
     { return getAction() == TriggerAction::EnterDebug; }
 
-    /// Return true if this trigger is enabled for loads (or stores if
-    /// isLoad is false), for addresses, for the given timing and if
-    /// it matches the given data address.  Return false otherwise.
+    /// Return true if this trigger is enabled for loads (if isLoad is true) or for stores
+    /// (if isStore is true), for addresses, for the given timing and if it matches the
+    /// given data address.  Return false otherwise.
     bool matchLdStAddr(URV address, unsigned size, TriggerTiming timing, bool isLoad,
-                       PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
-                       URV asid, unsigned asidLen, URV& hitAddr) const;
+                       bool isStore, PrivilegeMode mode, bool virtMode, URV mcontext,
+                       URV scontext, URV asid, unsigned asidLen, URV& hitAddr) const;
 
     /// Return true if this trigger is enabled for loads (or stores if
     /// isLoad is false), for data, for the given timing and if it
@@ -920,8 +920,8 @@ namespace WdRiscv
     // Helper to public matchLdStAddr.
     template <typename M>
     bool matchLdStAddr(URV address, unsigned size, TriggerTiming timing, bool isLoad,
-                       PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
-                       URV asid, unsigned asidLen, URV& hitAddr) const;
+                       bool isStore, PrivilegeMode mode, bool virtMode, URV mcontext,
+                       URV scontext, URV asid, unsigned asidLen, URV& hitAddr) const;
 
     template <typename M>
     bool matchLdStData(URV value, TriggerTiming timing, bool isLoad,
@@ -1086,15 +1086,16 @@ namespace WdRiscv
       return false;
     }
 
-    /// Return true if any of the load (store if isLoad is true) triggers trips. A
+    /// Return true if any of the load (if isLoad) or store (if isStore) triggers trips. A
     /// load/store trigger trips if it matches the given address and timing and if all the
     /// remaining triggers in its chain have tripped. Set the local-hit bit of any
     /// load/store trigger that matches. If the trigger action is contingent on interrupts
     /// being enabled (ie == true), then the trigger will not trip even if its condition
     /// is satisfied.
     bool ldStAddrTriggerHit(URV address, unsigned size, TriggerTiming, bool isLoad,
-                            PrivilegeMode mode, bool virtMode, bool ie, URV mcontext, URV scontext,
-                            URV asid, unsigned asidLen, URV& hitAddr);
+                            bool isStore, PrivilegeMode mode, bool virtMode, bool ie,
+                            URV mcontext, URV scontext, URV asid, unsigned asidLen,
+                            URV& hitAddr);
 
     /// Similar to ldStAddrTriggerHit but for data match.
     bool ldStDataTriggerHit(URV value, TriggerTiming, bool isLoad,

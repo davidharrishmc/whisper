@@ -1072,8 +1072,9 @@ matched a trigger and caused an exception.  When set to false, report in xTVAL t
 smallest address in the range that matched a trigger and caused an exception. Default
 is false. Example, if a lw instruction has an effective data address a0, and its
 address range matches a trigger at a0+2 causing an exception, then we will report
-a0 in xTVAL if address_trigge_reports_ea is set to true; otherwise, we will report
-a0+2. To be spec compliant, this parameter should be set to false.
+a0 in xTVAL if address_triggers_report_ea is set to true; otherwise, we will report
+a0+2. For a CBO instruction, the address range is the whole cache block. To be spec
+compliant, this parameter should be set to false.
 
 ### trigger registers
 
