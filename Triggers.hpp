@@ -430,6 +430,21 @@ namespace WdRiscv
       return true;
     }
 
+    /// Legalize the writable bits of the textra mhselect field (WARL): 3 and 7 are
+    /// reserved and, without the hypervisor extension, only 0 and 4 are legal. An
+    /// illegal value keeps only its bit 2 (3 -> 0, 7 -> 4, 1/2 -> 0, 5/6 -> 4).
+    void legalizeMhselect(bool hyper)
+    {
+      constexpr unsigned selShift = sizeof(URV) == 8 ? 48 : 23;
+
+      unsigned mhselect = unsigned((data3_ >> selShift) & URV(0x7));
+      if (hyper and (mhselect & 3) != 3)
+        return;
+
+      URV legal = data3_ & ~(URV(0x3) << selShift);   // Clear mhselect[1:0].
+      data3_ = (legal & data3WriteMask_) | (data3_ & ~data3WriteMask_);
+    }
+
     /// Write the tinfo register of the trigger. This is the interface for CSR
     /// instructions.
     bool writeInfo(bool debugMode, URV value)
@@ -638,7 +653,7 @@ namespace WdRiscv
       // mhselect 4: mcontext equals mhvalue.
       // mhselect 1/5 (H): mcontext equals {mhvalue, mhselect[2]}.
       // mhselect 2/6 (H): hgatp.VMID equals {mhvalue, mhselect[2]}.
-      // Other values (3 and 7 are reserved) are ignored.
+      // Other values are ignored (writeData3 only keeps legal values).
 
       constexpr unsigned selShift = sizeof(URV) == 8 ? 48 : 23;
       constexpr unsigned valShift = sizeof(URV) == 8 ? 51 : 26;
@@ -1407,6 +1422,7 @@ namespace WdRiscv
     std::vector< Trigger<URV> > triggers_;
     bool mmodeEnabled_ = true;  // Triggers trip in Machine mode when true.
     bool tcontrolEnabled_ = true;
+    bool hyperEnabled_ = false;  // Hypervisor extension enabled.
     bool clearData1OnDisabled_ = false;
     bool clearUnsupportedAction_ = false;
 

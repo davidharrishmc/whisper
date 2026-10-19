@@ -256,7 +256,12 @@ Triggers<URV>::writeData3(URV trigger, bool debugMode, URV value)
   if (trigger >= triggers_.size())
     return false;
 
-  return triggers_.at(trigger).writeData3(debugMode, value);
+  auto& trig = triggers_.at(trigger);
+  if (not trig.writeData3(debugMode, value))
+    return false;
+
+  trig.legalizeMhselect(hyperEnabled_);
+  return true;
 }
 
 
@@ -1004,6 +1009,8 @@ template <typename URV>
 void
 Triggers<URV>::enableHypervisor(bool flag)
 {
+  hyperEnabled_ = flag;
+
   // Setup read masks. The vs/vu bits are read-only-zero if hypervisor disabled.
 
   Data1Bits<URV> d1Bits(0);
