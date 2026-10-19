@@ -345,9 +345,9 @@ namespace WdRiscv
     URV readData2() const
     { return data2_; }
 
-    /// Read the tdata3 register of the trigger (currently unused).
-    URV readData3() const
-    { return data3_; }
+    /// Read the tdata3 register of the trigger.
+    URV readData3(bool hyperEnabled) const
+    { return legalData3(data3_, hyperEnabled); }
 
     /// Read the tinfo register ot the trigger.
     URV readInfo() const
@@ -420,12 +420,12 @@ namespace WdRiscv
 
     /// Write the tdata3 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData3(bool debugMode, URV value)
+    bool writeData3(bool debugMode, URV value, bool hyperEnabled)
     {
       if (isDebugModeOnly() and not debugMode)
 	return false;
 
-      data3_ = (value & data3WriteMask_) | (data3_ & ~data3WriteMask_);
+      data3_ = legalData3((value & data3WriteMask_) | (data3_ & ~data3WriteMask_), hyperEnabled);
       modifiedT3_ = true;
       return true;
     }
@@ -466,8 +466,24 @@ namespace WdRiscv
 
     /// Poke tdata3. This allows writing of modifiable bits that are read-only to the CSR
     /// instructions.
-    void pokeData3(URV x)
-    { data3_ = (x & data3PokeMask_) | (data3_ & ~data3PokeMask_); }
+    void pokeData3(URV x, bool hyperEnabled)
+    { data3_ = legalData3((x & data3PokeMask_) | (data3_ & ~data3PokeMask_), hyperEnabled); }
+
+    /// Return the given tdata3 (textra32/textra64) value with its WARL select fields made
+    /// legal: 0 in place of a reserved mhselect (3 or 7) or sselect (3), and in place of
+    /// an mhselect other than 0 and 4 while hyperEnabled is false (hypervisor disabled).
+    static URV legalData3(URV value, bool hyperEnabled)
+    {
+      constexpr unsigned mhShift = sizeof(URV) == 8 ? 48 : 23;
+      unsigned mhselect = unsigned((value >> mhShift) & URV(0x7));
+      bool mhLegal = hyperEnabled ? (mhselect & 3) != 3 : (mhselect & 3) == 0;
+      if (not mhLegal)
+        value &= ~(URV(0x7) << mhShift);
+
+      if ((value & URV(0x3)) == 3)
+        value &= ~URV(0x3);
+      return value;
+    }
 
     /// Poke tinfo. This allows writing of modifiable bits that are read-only to the CSR
     /// instructions.
@@ -487,9 +503,10 @@ namespace WdRiscv
     { infoReset_ = reset; info_ = reset; infoWriteMask_ = mask; infoPokeMask_ = pokeMask;}
 
     /// Reset trigger.
-    void reset()
+    void reset(bool hyperEnabled)
     {
-      data1_.value_ = data1Reset_; data2_ = data2Reset_; data3_ = data3Reset_;
+      data1_.value_ = data1Reset_; data2_ = data2Reset_;
+      data3_ = legalData3(data3Reset_, hyperEnabled);
       if (data1_.isMcontrol())
         data1_.mcontrol_.maskMax_ = napotMaskMax_;
       writeData2(true, data2Reset_); // Define compare mask
@@ -568,18 +585,13 @@ namespace WdRiscv
                          PrivilegeMode mode, bool virtMode) const;
     bool matchTextraScontext(URV scontext, URV asid, unsigned asidLen) const
     {
-      // RV64:
-      //   sselect   = bits 1:0, sbytemask = bits 35:32, svalue= bits 63:51
-      // RV32:
-      //   sselect   = bits 1:0, sbytemask = bits 19:16, svalue = bits 31:26.
-
       if constexpr (sizeof(URV) == 8)
         {
           unsigned sselect = unsigned(data3_ & URV(0x3));
 
-          if (sselect == 0 or sselect == 3)
+          if (sselect == 0)
             return true;
-          if (sselect == 2)                      //ASID match
+          if (sselect == 2)                      // ASID match
             {
               URV svalue = data3_ >> 2; 
               URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
@@ -603,9 +615,9 @@ namespace WdRiscv
         {
           unsigned sselect = unsigned(data3_ & URV(0x3));
 
-          if (sselect == 0 or sselect == 3)
+          if (sselect == 0)
             return true;
-          if (sselect == 2)                      // NEW: ASID match
+          if (sselect == 2)                      // ASID match
             {
               URV svalue = data3_ >> 2;  
               URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
@@ -1418,6 +1430,7 @@ namespace WdRiscv
     std::vector< Trigger<URV> > triggers_;
     bool mmodeEnabled_ = true;  // Triggers trip in Machine mode when true.
     bool tcontrolEnabled_ = true;
+    bool hyperEnabled_ = false;
     bool clearData1OnDisabled_ = false;
     bool clearUnsupportedAction_ = false;
 
