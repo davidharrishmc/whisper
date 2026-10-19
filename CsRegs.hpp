@@ -1337,7 +1337,7 @@ namespace WdRiscv
     {
       bool chainHit =
         triggers_.ldStAddrTriggerHit(addr, size, t, isLoad, mode, virtMode, ie,
-                                     mcontext(), scontext(), asid(), asidLen(), hitAddr);
+                                     mcontext(), vmid(), scontext(), asid(), asidLen(), hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1350,7 +1350,7 @@ namespace WdRiscv
     {
       bool chainHit =
         triggers_.ldStDataTriggerHit(data, t, isLoad, mode, virtMode, ie,
-                                     mcontext(),scontext(), asid(), asidLen());
+                                     mcontext(), vmid(), scontext(), asid(), asidLen());
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1362,7 +1362,7 @@ namespace WdRiscv
                             bool virtMode, bool ie, URV& hitAddr)
     {
       bool chainHit = triggers_.instAddrTriggerHit(addr, size, t, mode, virtMode, ie,
-                                                   mcontext(), scontext(), asid(), asidLen(),
+                                                   mcontext(), vmid(), scontext(), asid(), asidLen(),
                                                    hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
@@ -1375,7 +1375,7 @@ namespace WdRiscv
                               bool virtMode, bool ie)
     {
       bool chainHit = triggers_.instOpcodeTriggerHit(opcode, t, mode, virtMode, ie,
-                                                     mcontext(), scontext(), asid(), asidLen());
+                                                     mcontext(), vmid(), scontext(), asid(), asidLen());
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1387,7 +1387,7 @@ namespace WdRiscv
     bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
                        bool ie, bool& enterDebug, bool isNmi = false)
     {
-      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie, mcontext(),
+      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie, mcontext(), vmid(),
                                           scontext(), asid(), asidLen(), enterDebug, isNmi);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
@@ -1399,7 +1399,7 @@ namespace WdRiscv
     bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
                        bool ie, bool& enterDebug)
     {
-      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie, mcontext(),
+      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie, mcontext(), vmid(),
                                           scontext(), asid(), asidLen(), enterDebug);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
@@ -1413,6 +1413,17 @@ namespace WdRiscv
       return csr.read();
     }
     
+    /// Return the VMID field of hgatp.
+    URV vmid() const
+    {
+      const auto& csr = regs_.at(size_t(CsrNumber::HGATP));
+
+      if constexpr (sizeof(URV) == 8)
+        return (csr.read() >> 44) & URV(0x3fff);
+      else
+        return (csr.read() >> 22) & URV(0x7f);
+    }
+
     URV scontext() const
     {
       const auto& csr = regs_.at(size_t(CsrNumber::SCONTEXT));
@@ -1440,7 +1451,7 @@ namespace WdRiscv
     /// zero
     void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie, bool skipModified)
     {
-      triggers_.evaluateIcount(mode, virtMode, ie, skipModified, mcontext(), scontext(), asid(), asidLen());
+      triggers_.evaluateIcount(mode, virtMode, ie, skipModified, mcontext(), vmid(), scontext(), asid(), asidLen());
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1449,7 +1460,7 @@ namespace WdRiscv
     /// Return true if a pending icount trigger can fire clearing its pending status.
     bool icountTriggerFired(PrivilegeMode mode, bool virtMode, bool ie)
     {
-      return triggers_.icountTriggerFired(mode, virtMode, ie, mcontext(), scontext(), asid(), asidLen());
+      return triggers_.icountTriggerFired(mode, virtMode, ie, mcontext(), vmid(), scontext(), asid(), asidLen());
     }
 
     /// Set pre and post to the count of "before"/"after" triggers
