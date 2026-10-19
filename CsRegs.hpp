@@ -1327,16 +1327,17 @@ namespace WdRiscv
     bool pokeTrigger(URV trigger, URV data1, URV data2, URV data3)
     { return triggers_.poke(trigger, data1, data2, data3); }
 
-    /// Return true if any of the load (store if isLoad is false) triggers trips. A
+    /// Return true if any of the load (if isLoad) or store (if isStore) triggers trips. A
     /// load/store trigger trips if it matches the given address and timing and if all the
     /// remaining triggers in its chain have tripped. Set the local-hit bit of any
     /// load/store trigger that matches. If a matching load/store trigger causes its chain
     /// to trip, then set the hit bit of all the triggers in that chain.
     bool ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming t, bool isLoad,
-                            PrivilegeMode mode, bool virtMode, bool ie, URV& hitAddr)
+                            bool isStore, PrivilegeMode mode, bool virtMode, bool ie,
+                            URV& hitAddr)
     {
       bool chainHit =
-        triggers_.ldStAddrTriggerHit(addr, size, t, isLoad, mode, virtMode, ie,
+        triggers_.ldStAddrTriggerHit(addr, size, t, isLoad, isStore, mode, virtMode, ie,
                                      mcontext(), scontext(), asid(), asidLen(), hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))

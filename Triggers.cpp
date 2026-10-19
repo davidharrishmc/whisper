@@ -304,7 +304,7 @@ Triggers<URV>::updateChainHitBit(Trigger<URV>& trigger)
 template <typename URV>
 bool
 Triggers<URV>::ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming timing,
-                                  bool isLoad, PrivilegeMode mode,
+                                  bool isLoad, bool isStore, PrivilegeMode mode,
                                   bool virtMode, bool interruptEnabled,
                                   URV mcontext, URV scontext, URV asid, unsigned asidLen, URV& hitAddr)
 {
@@ -322,7 +322,7 @@ Triggers<URV>::ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming timing,
           continue;  // Cannot fire in machine mode.
 
       URV ha = addr;   // Hit address.
-      if (not trigger.matchLdStAddr(addr, size, timing, isLoad, mode, virtMode,
+      if (not trigger.matchLdStAddr(addr, size, timing, isLoad, isStore, mode, virtMode,
                                     mcontext, scontext, asid, asidLen, ha))
 	continue;
 
@@ -1064,8 +1064,8 @@ template <typename URV>
 template <typename M>
 bool
 Trigger<URV>::matchLdStAddr(URV addr, unsigned size, TriggerTiming timing, bool isLoad,
-                            PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
-                            URV asid, unsigned asidLen, URV& hitAddr) const
+                            bool isStore, PrivilegeMode mode, bool virtMode, URV mcontext,
+                            URV scontext, URV asid, unsigned asidLen, URV& hitAddr) const
 {
   const M& ctl = data1_.template mcontrol<M>();
 
@@ -1097,8 +1097,6 @@ Trigger<URV>::matchLdStAddr(URV addr, unsigned size, TriggerTiming timing, bool 
     }
   else if (virtMode)
     return false;
-
-  bool isStore = not isLoad;
 
   if (getTiming() == timing and Select(ctl.select_) == Select::MatchAddress and
       ((isLoad and ctl.load_) or (isStore and ctl.store_)))
@@ -1158,16 +1156,16 @@ Trigger<URV>::matchLdStAddr(URV addr, unsigned size, TriggerTiming timing, bool 
 template <typename URV>
 bool
 Trigger<URV>::matchLdStAddr(URV addr, unsigned size, TriggerTiming timing, bool isLoad,
-                            PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
-                            URV asid, unsigned asidLen, URV& hitAddr) const
+                            bool isStore, PrivilegeMode mode, bool virtMode, URV mcontext,
+                            URV scontext, URV asid, unsigned asidLen, URV& hitAddr) const
 {
   if (not data1_.isAddrData())
     return false;  // Not an address trigger.
 
   if (data1_.isMcontrol())
-    return matchLdStAddr<decltype(data1_.mcontrol_)>(addr, size, timing, isLoad, mode, virtMode, mcontext, scontext, asid, asidLen, hitAddr);
+    return matchLdStAddr<decltype(data1_.mcontrol_)>(addr, size, timing, isLoad, isStore, mode, virtMode, mcontext, scontext, asid, asidLen, hitAddr);
 
-  return matchLdStAddr<decltype(data1_.mcontrol6_)>(addr, size, timing, isLoad, mode, virtMode, mcontext, scontext, asid, asidLen, hitAddr);
+  return matchLdStAddr<decltype(data1_.mcontrol6_)>(addr, size, timing, isLoad, isStore, mode, virtMode, mcontext, scontext, asid, asidLen, hitAddr);
 }
 
 
