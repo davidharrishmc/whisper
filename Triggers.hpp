@@ -569,7 +569,7 @@ namespace WdRiscv
     bool matchTextraScontext(URV scontext, URV asid, unsigned asidLen) const
     {
       // RV64:
-      //   sselect   = bits 1:0, sbytemask = bits 35:32, svalue= bits 63:51
+      //   sselect   = bits 1:0, svalue = bits 33:2, sbytemask = bits 39:36
       // RV32:
       //   sselect   = bits 1:0, sbytemask = bits 19:16, svalue = bits 31:26.
 
@@ -589,12 +589,13 @@ namespace WdRiscv
           URV svalue = (data3_ >> 2) & URV(0xffffffff);
           unsigned sbytemask = unsigned((data3_ >> 36) & URV(0xf));
 
-          URV mask = URV(0);
+          // Compare the low 32 bits of scontext, ignoring byte i if sbytemask bit i is set.
+          URV mask = URV(0xffffffff);
 
           for (unsigned i = 0; i < 4; ++i)
             {
               if ((sbytemask >> i) & 1)
-                mask |= ~(URV(0xff) << (8 * i));
+                mask &= ~(URV(0xff) << (8 * i));
             }
 
           return (scontext & mask) == (svalue & mask);
@@ -615,12 +616,13 @@ namespace WdRiscv
           URV svalue = (data3_ >> 2) & URV(0xfff);
           unsigned sbytemask = unsigned((data3_ >> 18) & URV(0x3));
 
-          URV mask = URV(0);
+          // Ignore byte i of scontext if sbytemask bit i is set.
+          URV mask = ~URV(0);
 
           for (unsigned i = 0; i < 2; ++i)
             {
               if ((sbytemask >> i) & 1)
-                mask |= ~(URV(0xff) << (8 * i));
+                mask &= ~(URV(0xff) << (8 * i));
             }
 
           return (scontext & mask) == (svalue & mask);
