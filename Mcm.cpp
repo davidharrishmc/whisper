@@ -32,7 +32,7 @@ Mcm<URV>::Mcm(unsigned hartCount, unsigned pageSize, unsigned lineSize)
   ppoEnabled_.resize(PpoRule::Limit, true);
 
   // Currently Io PPO is disabled by default.
-  ppoEnabled_.at(unsigned(PpoRule::Io)) = false;
+  ppoEnabled_.at(unsigned(PpoRule::Io)) = true;
 }
 
 
@@ -3858,6 +3858,10 @@ Mcm<URV>::ppoRule1(Hart<URV>& hart, const McmInstr& instrB) const
   if (not instrB.complete_)
     return true;  // We will try again when B is complete.
 
+  // Check store-vector-indexed element to element re-ordering.
+  if (instrB.di_.isVectorStoreIndexed() and not ppoRule1VecStIx(hart, instrB))
+    return false;
+
   auto hartIx = hart.sysHartIndex();
   const auto& instrVec = hartData_.at(hartIx).instrVec_;
 
@@ -3912,7 +3916,7 @@ Mcm<URV>::ppoRule2(Hart<URV>& hart, const McmInstr& instrB) const
   if (not instrB.isLoad_)
     return true;  // NA: B is not a load.
 
-  // Check element to element re-ordering.
+  // Check load-vector-indexed element to element re-ordering.
   if (instrB.di_.isVectorLoadIndexed() and not ppoRule2VecLdIx(hart, instrB))
     return false;
 
@@ -4061,6 +4065,61 @@ Mcm<URV>::ppoRule2VecLdIx(Hart<URV>& hart, const McmInstr& instrB) const
                     }
                 }
             }
+        }
+    }
+
+  return true;
+}
+
+
+template <typename URV>
+bool
+Mcm<URV>::ppoRule1VecStIx(Hart<URV>& hart, const McmInstr& instrB) const
+{
+  // Only indexed-ordered stores (mop == 3) obey RVWMO at the element level. Element
+  // operations of other vector loads are unordered within the instruction.
+  unsigned mop = (instrB.di_.inst() >> 26) & 3;
+  if (not instrB.di_.isVectorStoreIndexed() or mop != 3)
+    return true;  // NA.
+
+  bool ordered = true;
+  for (size_t i = 1; i < instrB.memOps_.size() and ordered; ++i)
+    {
+      const auto& prevOp = sysMemOps_.at(instrB.memOps_.at(i-1));
+      const auto& op = sysMemOps_.at(instrB.memOps_.at(i));
+      if (op.elemIx_ < prevOp.elemIx_)
+        ordered = false;
+    }
+
+  if (ordered)
+    return true;
+
+  // Elements are not ordered. Fail if a later element write happens before an earlier
+  // overlapping element write.
+  const auto& memOps = instrB.memOps_;
+
+  for (size_t i = 0; i < memOps.size(); ++i)
+    {
+      const auto& hiOp = sysMemOps_.at(memOps.at(i));  // Performed first.
+      if (hiOp.isCanceled())
+        continue;
+
+      for (size_t j = i + 1; j < memOps.size(); ++j)
+        {
+          const auto& loOp = sysMemOps_.at(memOps.at(j));  // Performed second.
+          if (loOp.isCanceled() or loOp.elemIx_ >= hiOp.elemIx_ or not loOp.overlaps(hiOp))
+            continue;
+
+          if (hiOp.time_ >= loOp.time_)
+            continue;
+
+          cerr << (ppoWarn_ ? "Warning: " : "Error: ")
+               << "PPO Rule 1 failed: hart-id=" << hart.hartId()
+               << " tag=" << instrB.tag_ << " elem1=" << loOp.elemIx_
+               << " elem2=" << hiOp.elemIx_
+               << " time1=" << loOp.time_ << " time2=" << hiOp.time_
+               << " addr=0x" << std::hex << loOp.pa_ << std::dec << '\n';
+          return ppoWarn_;
         }
     }
 
