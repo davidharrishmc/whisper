@@ -1361,7 +1361,9 @@ namespace WdRiscv
     bool instAddrTriggerHit(URV addr, unsigned size, TriggerTiming t, PrivilegeMode mode,
                             bool virtMode, bool ie, URV& hitAddr)
     {
-      bool chainHit = triggers_.instAddrTriggerHit(addr, size, t, mode, virtMode, ie, hitAddr);
+      bool chainHit = triggers_.instAddrTriggerHit(addr, size, t, mode, virtMode, ie,
+                                                   mcontext(), scontext(), asid(), asidLen(),
+                                                   hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1372,7 +1374,8 @@ namespace WdRiscv
     bool instOpcodeTriggerHit(URV opcode, TriggerTiming t, PrivilegeMode mode,
                               bool virtMode, bool ie)
     {
-      bool chainHit = triggers_.instOpcodeTriggerHit(opcode, t, mode, virtMode, ie);
+      bool chainHit = triggers_.instOpcodeTriggerHit(opcode, t, mode, virtMode, ie,
+                                                     mcontext(), scontext(), asid(), asidLen());
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1384,8 +1387,8 @@ namespace WdRiscv
     bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
                        bool ie, bool& enterDebug, bool isNmi = false)
     {
-      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie, enterDebug,
-                                          isNmi);
+      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie, mcontext(),
+                                          scontext(), asid(), asidLen(), enterDebug, isNmi);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1396,7 +1399,8 @@ namespace WdRiscv
     bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
                        bool ie, bool& enterDebug)
     {
-      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie, enterDebug);
+      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie, mcontext(),
+                                          scontext(), asid(), asidLen(), enterDebug);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.

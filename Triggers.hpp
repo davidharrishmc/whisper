@@ -559,13 +559,15 @@ namespace WdRiscv
     /// addresses (execution), for the given timing and if it matches
     /// the given address. Return false otherwise.
     bool matchInstAddr(URV address, unsigned size, TriggerTiming timing,
-                       PrivilegeMode mode, bool virtMode, URV& hitAddr) const;
+                       PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
+                       URV asid, unsigned asidLen, URV& hitAddr) const;
 
     /// Return true if this trigger is enabled for instruction opcodes
     /// (execution), for the given timing and if it matches the given
     /// opcode.  Return false otherwise.
     bool matchInstOpcode(URV opcode, TriggerTiming timing,
-                         PrivilegeMode mode, bool virtMode) const;
+                         PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
+                         URV asid, unsigned asidLen) const;
     bool matchTextraScontext(URV scontext, URV asid, unsigned asidLen) const
     {
       // RV64:
@@ -909,11 +911,13 @@ namespace WdRiscv
 
     template <typename M>
     bool matchInstAddr(URV address, unsigned size, TriggerTiming timing,
-                       PrivilegeMode mode, bool virtMode, URV& hitAddr) const;
+                       PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
+                       URV asid, unsigned asidLen, URV& hitAddr) const;
 
     template <typename M>
     bool matchInstOpcode(URV opcode, TriggerTiming timing,
-                         PrivilegeMode mode, bool virtMode) const;
+                         PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext,
+                         URV asid, unsigned asidLen) const;
 
     /// Return true if given match type compares against all data addresses of an
     /// instruction (2 address of lh, 4 for lw, ...), return false otherwise indicating
@@ -1078,11 +1082,13 @@ namespace WdRiscv
 
     /// Similar to ldStAddrTriggerHit but for instruction address.
     bool instAddrTriggerHit(URV address, unsigned size, TriggerTiming timing,
-                            PrivilegeMode mode, bool virtMode, bool ie, URV& hitAddr);
+                            PrivilegeMode mode, bool virtMode, bool ie, URV mcontext, URV scontext,
+                            URV asid, unsigned asidLen, URV& hitAddr);
 
     /// Similar to instAddrTriggerHit but for instruction opcode.
     bool instOpcodeTriggerHit(URV opcode, TriggerTiming timing,
-                              PrivilegeMode mode, bool virtMode, bool ie);
+                              PrivilegeMode mode, bool virtMode, bool ie, URV mcontext, URV scontext,
+                              URV asid, unsigned asidLen);
 
     /// Make every active icount trigger count down unless it was written by the current
     /// instruction. If a count-down register becomes zero as a result of the count-down
@@ -1098,11 +1104,13 @@ namespace WdRiscv
     /// enterDebug if one has the latter. The mode/virtMode are those the trap was taken
     /// from; handlerMode is the mode it was taken into, where the trigger fires.
     bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
-                       PrivilegeMode handlerMode, bool interruptEnabled, bool& enterDebug);
+                       PrivilegeMode handlerMode, bool interruptEnabled, URV mcontext,
+                       URV scontext, URV asid, unsigned asidLen, bool& enterDebug);
 
     /// Same as expTriggerHit but for the interrupt-triggers (itrigger).
     bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
-                       PrivilegeMode handlerMode, bool interruptEnabled, bool& enterDebug,
+                       PrivilegeMode handlerMode, bool interruptEnabled, URV mcontext,
+                       URV scontext, URV asid, unsigned asidLen, bool& enterDebug,
                        bool isNmi);
 
     /// Return the tigger at the given index. Reurn None if index is out of bounds.
