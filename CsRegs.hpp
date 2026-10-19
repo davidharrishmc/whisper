@@ -1337,7 +1337,7 @@ namespace WdRiscv
     {
       bool chainHit =
         triggers_.ldStAddrTriggerHit(addr, size, t, isLoad, mode, virtMode, ie,
-                                     mcontext(), scontext(), asid(), asidLen(), hitAddr);
+                                     mcontext(), scontext(), asid(virtMode), asidLen(), hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1350,7 +1350,7 @@ namespace WdRiscv
     {
       bool chainHit =
         triggers_.ldStDataTriggerHit(data, t, isLoad, mode, virtMode, ie,
-                                     mcontext(),scontext(), asid(), asidLen());
+                                     mcontext(),scontext(), asid(virtMode), asidLen());
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1415,9 +1415,12 @@ namespace WdRiscv
       return csr.read();
     }
 
-    URV asid() const
+    /// Return the ASID used by textra sselect=2: that of vsatp in VS/VU-mode (virtMode
+    /// true) and that of satp otherwise.
+    URV asid(bool virtMode) const
     {
-      const auto& csr = regs_.at(size_t(CsrNumber::SATP));
+      auto csrn = virtMode ? CsrNumber::VSATP : CsrNumber::SATP;
+      const auto& csr = regs_.at(size_t(csrn));
 
       if constexpr (sizeof(URV) == 8)
 	    return (csr.read() >> 44) & URV(0xffff);
@@ -1436,7 +1439,7 @@ namespace WdRiscv
     /// zero
     void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie, bool skipModified)
     {
-      triggers_.evaluateIcount(mode, virtMode, ie, skipModified, mcontext(), scontext(), asid(), asidLen());
+      triggers_.evaluateIcount(mode, virtMode, ie, skipModified, mcontext(), scontext(), asid(virtMode), asidLen());
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1445,7 +1448,7 @@ namespace WdRiscv
     /// Return true if a pending icount trigger can fire clearing its pending status.
     bool icountTriggerFired(PrivilegeMode mode, bool virtMode, bool ie)
     {
-      return triggers_.icountTriggerFired(mode, virtMode, ie, mcontext(), scontext(), asid(), asidLen());
+      return triggers_.icountTriggerFired(mode, virtMode, ie, mcontext(), scontext(), asid(virtMode), asidLen());
     }
 
     /// Set pre and post to the count of "before"/"after" triggers
