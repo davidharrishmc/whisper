@@ -571,7 +571,7 @@ namespace WdRiscv
       // RV64:
       //   sselect   = bits 1:0, svalue = bits 33:2, sbytemask = bits 39:36
       // RV32:
-      //   sselect   = bits 1:0, sbytemask = bits 19:16, svalue = bits 31:26.
+      //   sselect   = bits 1:0, svalue = bits 17:2, sbytemask = bits 19:18
 
       if constexpr (sizeof(URV) == 8)
         {
@@ -613,11 +613,11 @@ namespace WdRiscv
               return (svalue & amask) == (asid & amask);
             }
 
-          URV svalue = (data3_ >> 2) & URV(0xfff);
+          URV svalue = (data3_ >> 2) & URV(0xffff);
           unsigned sbytemask = unsigned((data3_ >> 18) & URV(0x3));
 
-          // Ignore byte i of scontext if sbytemask bit i is set.
-          URV mask = ~URV(0);
+          // Compare the low 16 bits of scontext, ignoring byte i if sbytemask bit i is set.
+          URV mask = URV(0xffff);
 
           for (unsigned i = 0; i < 2; ++i)
             {
