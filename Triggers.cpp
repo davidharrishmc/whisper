@@ -127,7 +127,7 @@ Triggers<URV>::readData3(URV trigger, URV& value) const
   if (trigger >= triggers_.size())
     return false;
 
-  value = triggers_.at(trigger).readData3();
+  value = triggers_.at(trigger).readData3(hyperEnabled_);
   return true;
 }
 
@@ -256,7 +256,7 @@ Triggers<URV>::writeData3(URV trigger, bool debugMode, URV value)
   if (trigger >= triggers_.size())
     return false;
 
-  return triggers_.at(trigger).writeData3(debugMode, value);
+  return triggers_.at(trigger).writeData3(debugMode, value, hyperEnabled_);
 }
 
 
@@ -686,7 +686,7 @@ void
 Triggers<URV>::reset()
 {
   for (auto& trigger : triggers_)
-    trigger.reset();
+    trigger.reset(hyperEnabled_);
   defineChainBounds();
 }
 
@@ -869,7 +869,7 @@ Triggers<URV>::poke(URV trigger, URV v1, URV v2, URV v3)
 
   trig.pokeData1(v1);
   trig.pokeData2(v2);
-  trig.pokeData3(v3);
+  trig.pokeData3(v3, hyperEnabled_);
 
   return true;
 }
@@ -944,7 +944,7 @@ Triggers<URV>::pokeData3(URV trigger, URV val)
 
   Trigger<URV>& trig = triggers_.at(trigger);
 
-  trig.pokeData3(val);
+  trig.pokeData3(val, hyperEnabled_);
   return true;
 }
 
@@ -1048,6 +1048,8 @@ Triggers<URV>::enableHypervisor(bool flag)
   wmask = data1WriteMasks_.at(unsigned(TriggerType::Etrigger));
   wmask = flag? wmask | mask : wmask & ~ mask;
   data1WriteMasks_.at(unsigned(TriggerType::Etrigger)) = wmask;
+
+  hyperEnabled_ = flag;
 }
 
 
