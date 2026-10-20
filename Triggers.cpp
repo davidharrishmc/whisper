@@ -1125,18 +1125,21 @@ Trigger<URV>::matchLdStAddr(URV addr, unsigned size, TriggerTiming timing, bool 
 		return false;
 	      break;
 
-	    case 4:  // 6-byte access
-	      assert(0 && "Error: Assertion failed");  // Not supported
-	      break;
+	    case 4:  // 48-bit: only matches 48-bit instructions, which Whisper does not have
+	      return false;
 
 	    case 5:  // double word access
 	      if (size != 8)
 		return false;
 	      break;
 
-	    default:
-	      assert(0 && "Error: Assertion failed");
+	    case 6:  // quad word access
+	      if (size != 16)
+		return false;
 	      break;
+
+	    default:  // Reserved
+	      return false;
 	    }
 	}
 
@@ -1366,18 +1369,21 @@ Trigger<URV>::matchInstAddr(URV addr, unsigned size, TriggerTiming timing, Privi
 		return false;
 	      break;
 
-	    case 4:  // 6-byte access
-	      assert(0 && "Error: Assertion failed");  // Not supported
-	      break;
+	    case 4:  // 48-bit: only matches 48-bit instructions, which Whisper does not have
+	      return false;
 
 	    case 5:  // double word access
 	      if (size != 8)
 		return false;
 	      break;
 
-	    default:
-	      assert(0 && "Error: Assertion failed");
+	    case 6:  // quad word access
+	      if (size != 16)
+		return false;
 	      break;
+
+	    default:  // Reserved
+	      return false;
 	    }
 	}
 
