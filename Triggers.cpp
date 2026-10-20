@@ -158,13 +158,16 @@ Triggers<URV>::writeData1(URV trigIx, bool debugMode, URV value)
 
   Data1Bits d1bits(value); // Unpack value of attempted write.
 
+  // Outside debug mode dmode is not writable: the trigger keeps its own.
+  bool newDmode = debugMode ? d1bits.dmode() : trig.isDebugModeOnly();
+
   // If next trigger has a dmode of 1 (debugger only), then clear
-  // chain bit in attempted wirte if write would also set dmode to 0.
+  // chain bit in attempted write if write would also set dmode to 0.
   // Otherwise we would have a chain with different dmodes.
   if (trigIx + 1 < triggers_.size())
     {
       auto& nextTrig = triggers_.at(trigIx + 1);
-      if (nextTrig.isDebugModeOnly() and not d1bits.dmode())
+      if (nextTrig.isDebugModeOnly() and not newDmode)
         {
           d1bits.mcontrol_.chain_ = 0;
           value = d1bits.value_;
@@ -174,11 +177,11 @@ Triggers<URV>::writeData1(URV trigIx, bool debugMode, URV value)
   // Write is ignored if it would set dmode and previous trigger has
   // both dmode=0 and chain=1. Otherwise, we would have a chain with
   // different dmodes.
-  if (d1bits.dmode() and trigIx > 0)
+  if (newDmode and trigIx > 0)
     {
       auto& prevTrig = triggers_.at(trigIx - 1);
       if (prevTrig.getChain() and not prevTrig.isDebugModeOnly())
-        return false;
+        return true;
     }
 
   bool oldChain = trig.getChain();
@@ -227,8 +230,7 @@ Triggers<URV>::writeData1(URV trigIx, bool debugMode, URV value)
 
   URV prev = trig.readData1();
   URV next = (prev & ~mask) | (value & mask);
-  if (not trig.writeData1(debugMode, next))
-    return false;
+  trig.writeData1(debugMode, next);
 
   bool newChain = trig.getChain();
   if (oldChain != newChain)
@@ -245,7 +247,8 @@ Triggers<URV>::writeData2(URV trigger, bool debugMode, URV value)
   if (trigger >= triggers_.size())
     return false;
 
-  return triggers_.at(trigger).writeData2(debugMode, value);
+  triggers_.at(trigger).writeData2(debugMode, value);
+  return true;
 }
 
 
@@ -256,7 +259,8 @@ Triggers<URV>::writeData3(URV trigger, bool debugMode, URV value)
   if (trigger >= triggers_.size())
     return false;
 
-  return triggers_.at(trigger).writeData3(debugMode, value, hyperEnabled_);
+  triggers_.at(trigger).writeData3(debugMode, value, hyperEnabled_);
+  return true;
 }
 
 
@@ -267,7 +271,8 @@ Triggers<URV>::writeInfo(URV trigger, bool debugMode, URV value)
   if (trigger >= triggers_.size())
     return false;
 
-  return triggers_.at(trigger).writeInfo(debugMode, value);
+  triggers_.at(trigger).writeInfo(debugMode, value);
+  return true;
 }
 
 

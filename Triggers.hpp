@@ -355,10 +355,10 @@ namespace WdRiscv
 
     /// Write the tdata1 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData1(bool debugMode, URV val)
+    void writeData1(bool debugMode, URV val)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
       URV mask = data1WriteMask_;
       if (not debugMode)  // dmode bit writable only in debug mode
 	mask &= ~(URV(1) << (8*sizeof(URV) - 5));
@@ -399,48 +399,42 @@ namespace WdRiscv
 	  if (not data1_.dmode() and (data1_.etrigger_.action_ == 1))
 	    data1_.etrigger_.action_ = 0;
         }
-
-      return true;
     }
 
     /// Write the tdata2 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData2(bool debugMode, URV value)
+    void writeData2(bool debugMode, URV value)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
 
       data2_ = (value & data2WriteMask_) | (data2_ & ~data2WriteMask_);
       modifiedT2_ = true;
 
       legalizeNapotData2();
       updateCompareMask();
-      return true;
     }
 
     /// Write the tdata3 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData3(bool debugMode, URV value, bool hyperEnabled)
+    void writeData3(bool debugMode, URV value, bool hyperEnabled)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
 
       data3_ = legalData3((value & data3WriteMask_) | (data3_ & ~data3WriteMask_), hyperEnabled);
       modifiedT3_ = true;
-      return true;
     }
 
     /// Write the tinfo register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeInfo(bool debugMode, URV value)
+    void writeInfo(bool debugMode, URV value)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
 
       info_.value_ = (value & infoWriteMask_) | (info_.value_ & ~infoWriteMask_);
       modifiedInfo_ = true;
-
-      return true;
     }
 
     /// Poke tdata1. This allows writing of modifiable bits that are read-only to the CSR
@@ -1047,22 +1041,19 @@ namespace WdRiscv
     bool readControl(URV trigger, URV& value) const;
 
     /// Set the tdata1 register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds.
+    /// success and false if trigger is out of bounds.
     bool writeData1(URV trigger, bool debugMode, URV value);
 
     /// Set the tdata2 register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds or if
-    /// tdata2 is not implemented.
+    /// success and false if trigger is out of bounds.
     bool writeData2(URV trigger, bool debugMode, URV value);
 
     /// Set the tdata3 register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds or if
-    /// tdata3 is not implemented.
+    /// success and false if trigger is out of bounds.
     bool writeData3(URV trigger, bool debugMode, URV value);
 
     /// Set the tinfo register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds or if
-    /// tinfo is not implemented.
+    /// success and false if trigger is out of bounds.
     bool writeInfo(URV trigger, bool debugMode, URV value);
 
     /// Set the tcontrol register of the given trigger to the given value. Return true on
