@@ -313,8 +313,7 @@ Triggers<URV>::ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming timing,
                                   bool virtMode, bool interruptEnabled,
                                   const TextraContext<URV>& context, URV& hitAddr)
 {
-  // Check if we should skip tripping because we are running in machine mode and
-  // interrupts are disabled.
+  // Check if we should skip tripping because of reentrant behavior.
   bool skip = not interruptEnabled;
   if (tcontrolEnabled_)
     skip = mode == PrivilegeMode::Machine and not mmodeEnabled_;
@@ -324,7 +323,7 @@ Triggers<URV>::ldStAddrTriggerHit(URV addr, unsigned size, TriggerTiming timing,
     {
       if (unsigned(trigger.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trigger.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       URV ha = addr;   // Hit address.
       if (not trigger.matchLdStAddr(addr, size, timing, isLoad, isStore, mode, virtMode,
@@ -360,7 +359,7 @@ Triggers<URV>::ldStDataTriggerHit(URV value, TriggerTiming timing, bool isLoad,
     {
       if (unsigned(trigger.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trigger.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       if (not trigger.matchLdStData(value, timing, isLoad, mode, virtMode, context))
 	continue;
@@ -391,7 +390,7 @@ Triggers<URV>::instAddrTriggerHit(URV addr, unsigned size, TriggerTiming timing,
     {
       if (unsigned(trigger.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trigger.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       URV ha = addr;  // Hit address
       if (not trigger.matchInstAddr(addr, size, timing, mode, virtMode, context, ha))
@@ -426,7 +425,7 @@ Triggers<URV>::instOpcodeTriggerHit(URV opcode, TriggerTiming timing,
     {
       if (unsigned(trigger.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trigger.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       if (not trigger.matchInstOpcode(opcode, timing, mode, virtMode, context))
 	continue;
@@ -460,7 +459,7 @@ Triggers<URV>::icountTriggerFired(PrivilegeMode mode, bool virtMode, bool interr
 
       if (unsigned(trig.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trig.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       if (trig.data1_.icount_.pending_)
         {
@@ -499,7 +498,7 @@ Triggers<URV>::evaluateIcount(PrivilegeMode mode, bool virtMode, bool interruptE
 
       if (unsigned(trig.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trig.isEnterDebugOnHit() and skip)
-          continue;  // Cannot hit in machine mode.
+          continue;
 
       if (not trig.instCountdown())
         continue;
@@ -531,7 +530,7 @@ Triggers<URV>::expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
     {
       if (unsigned(trigger.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trigger.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       if (not trigger.data1_.isEtrigger())
 	continue;
@@ -580,21 +579,18 @@ Triggers<URV>::intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
     {
       if (unsigned(trigger.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trigger.isEnterDebugOnHit() and skip)
-          continue;  // Cannot fire in machine mode.
+          continue;
 
       if (not trigger.data1_.isItrigger())
 	continue;
 
       auto& itrig = trigger.data1_.itrigger_;
 
-      if (itrig.nmi_ != isNmi)
-        continue;
-
       if (not trigger.matchModeAndTextra(itrig, mode, virtMode, context))
         continue;
 
-      URV data2 = trigger.data2_;
-      if (data2 & mask)
+      bool selected = isNmi ? itrig.nmi_ : (trigger.data2_ & mask) != 0;
+      if (selected)
 	{
 	  trigger.setLocalHit(true);
           trigger.setHit(true);

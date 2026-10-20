@@ -1669,14 +1669,8 @@ namespace WdRiscv
     /// Enter debug mode if dcsr step unless already there.
     void evaluateDebugStep()
     {
-      // If step bit set in dcsr then enter debug mode unless already there.
-      // From section 4.5.1, if a trigger fires we write TRIGGER instead of STEP to
-      // dcsr.
       if (dcsrStep_ and not debugMode_ and not ebreakInstDebug_)
-        {
-          auto cause = breakpOrEnterDebugTripped()? DebugModeCause::TRIGGER : DebugModeCause::STEP;
-          enterDebugMode_(cause, pc_);
-        }
+        enterDebugMode_(DebugModeCause::STEP, pc_);
     }
 
     /// Take this hart out of debug mode.
@@ -6809,6 +6803,7 @@ namespace WdRiscv
     {
       triggerTripped_ = enteredDebugMode_ = hasInterrupt_ = hasException_ = false;
       ldStTriggerTripped_ = false;
+      zeroTvalBreakp_ = false;
       ebreakInstDebug_ = false;
       ldStSize_ = 0;
       lastPriv_ = privMode_;
@@ -6912,7 +6907,7 @@ namespace WdRiscv
     bool hasInterrupt_ = false;      // True if there is an interrupt.
     bool triggerTripped_ = false;    // True if a trigger trips.
     bool ldStTriggerTripped_ = false; // True if a load/store trigger trips.
-    bool icountTrig_ = false;        // True if icount trigger hit.
+    bool zeroTvalBreakp_ = false;    // True while taking a breakpoint with tval 0.
 
     bool lastBranchTaken_ = false; // Useful for performance counters
     bool misalignedLdSt_ = false;  // Useful for performance counters
@@ -7042,7 +7037,6 @@ namespace WdRiscv
     bool clearMtvalOnIllInst_ = false;
     bool clearMtvalOnEbreak_ = false;
     bool clearMtvalOnEgs_ = false;
-    bool lastEbreak_ = false;
     bool egsConstraint_ = false;
 
     bool clearTinstOnCboInval_ = false;
