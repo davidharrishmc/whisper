@@ -411,7 +411,7 @@ namespace WdRiscv
       data2_ = (value & data2WriteMask_) | (data2_ & ~data2WriteMask_);
       modifiedT2_ = true;
 
-      if (data1_.isMcontrol6() and data2_ == ~URV(0))
+      if (data1_.isMcontrol6() and Match(data1_.mcontrol6_.match_) == Match::Masked and data2_ == ~URV(0))
         data2_ = napotMask_;
 
       updateCompareMask();
@@ -460,7 +460,7 @@ namespace WdRiscv
     {
       data2_ = (x & data2PokeMask_) | (data2_ & ~data2PokeMask_);
 
-      if (data1_.isMcontrol6() and data2_ == ~URV(0))
+      if (data1_.isMcontrol6() and Match(data1_.mcontrol6_.match_) == Match::Masked and data2_ == ~URV(0))
         data2_ = napotMask_;
 
       updateCompareMask();
