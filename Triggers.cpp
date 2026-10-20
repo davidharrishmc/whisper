@@ -156,54 +156,17 @@ Triggers<URV>::writeData1(URV trigIx, bool debugMode, URV value)
 
   auto& trig = triggers_.at(trigIx);
 
-  Data1Bits d1bits(value); // Unpack value of attempted write.
-
-  // Outside debug mode dmode is not writable: the trigger keeps its own.
-  bool newDmode = debugMode ? d1bits.dmode() : trig.isDebugModeOnly();
-
-  // If next trigger has a dmode of 1 (debugger only), then clear
-  // chain bit in attempted write if write would also set dmode to 0.
-  // Otherwise we would have a chain with different dmodes.
-  if (trigIx + 1 < triggers_.size())
-    {
-      auto& nextTrig = triggers_.at(trigIx + 1);
-      if (nextTrig.isDebugModeOnly() and not newDmode)
-        {
-          d1bits.mcontrol_.chain_ = 0;
-          value = d1bits.value_;
-        }
-    }
-
-  // Write is ignored if it would set dmode and previous trigger has
-  // both dmode=0 and chain=1. Otherwise, we would have a chain with
-  // different dmodes.
-  if (newDmode and trigIx > 0)
-    {
-      auto& prevTrig = triggers_.at(trigIx - 1);
-      if (prevTrig.getChain() and not prevTrig.isDebugModeOnly())
-        return true;
-    }
-
-  bool oldChain = trig.getChain();
-
-  // If new type is not supported, preserve old type.
   Data1Bits<URV> valBits{value};
-  bool preserveType = not isSupportedType(valBits.type());
+  bool unsupportedType = not isSupportedType(valBits.type());
 
-  if (valBits.type() != TriggerType::None and not preserveType)
+  if (valBits.type() != TriggerType::None and not unsupportedType)
+    unsupportedType = not trig.supportsType(valBits.type());
+
+  if (unsupportedType)
     {
-      // If new type is not supported by this trigger, preserve old type.
-      auto typeNumber = unsigned(valBits.type());
-      unsigned mask = 1 << typeNumber;
-      TinfoBits tinfo(trig.readInfo());
-      preserveType = not (tinfo.info() & mask);
+      valBits.setType(TriggerType::Disabled);
+      value = valBits.value_;
     }
-
-  if (preserveType)
-     {
-       valBits.setType(trig.data1_.type());
-       value = valBits.value_;
-     }
 
   // If new action is not supported, preserve old action or clear field.
   if (not isSupportedAction(valBits.action()))
@@ -214,14 +177,12 @@ Triggers<URV>::writeData1(URV trigIx, bool debugMode, URV value)
       value = valBits.value_;
     }
 
-  // If incmoming type is "disabled" clear all other bits except type and dmode (most sig
-  // 5 bits).
-  if (clearData1OnDisabled_ and valBits.isDisabled())
+  if (unsupportedType or (clearData1OnDisabled_ and valBits.isDisabled()))
     {
       auto copy = valBits;
-      valBits = Data1Bits<URV>{0};  // Clear
-      valBits.setType(copy.type());    // Keep type
-      valBits.setDmode(copy.dmode());  // Keep dmode
+      valBits = Data1Bits<URV>{0};
+      valBits.setType(copy.type());
+      valBits.setDmode(copy.dmode());
       value = valBits.value_;
     }
 
@@ -230,6 +191,38 @@ Triggers<URV>::writeData1(URV trigIx, bool debugMode, URV value)
 
   URV prev = trig.readData1();
   URV next = (prev & ~mask) | (value & mask);
+
+  // The chain rules below go by the value the write leaves in tdata1, after type
+  // resolution and both write masks.
+  Data1Bits<URV> written{trig.writtenData1(debugMode, next)};
+
+  // If next trigger has a dmode of 1 (debugger only), then clear
+  // chain bit in attempted write if write would also set dmode to 0.
+  // Otherwise we would have a chain with different dmodes.
+  if (written.isAddrData() and not written.dmode() and trigIx + 1 < triggers_.size())
+    {
+      auto& nextTrig = triggers_.at(trigIx + 1);
+      if (nextTrig.isDebugModeOnly())
+        {
+          // Zeroed in the value to write, so the trigger's write mask applies to it.
+          Data1Bits<URV> bits{next};
+          bits.mcontrol_.chain_ = 0;  // Same bit as the chain of mcontrol6.
+          next = bits.value_;
+        }
+    }
+
+  // Write is ignored if it would set dmode and previous trigger has
+  // both dmode=0 and chain=1. Otherwise, we would have a chain with
+  // different dmodes.
+  if (written.dmode() and trigIx > 0)
+    {
+      auto& prevTrig = triggers_.at(trigIx - 1);
+      if (prevTrig.getChain() and not prevTrig.isDebugModeOnly())
+        return true;
+    }
+
+  bool oldChain = trig.getChain();
+
   trig.writeData1(debugMode, next);
 
   bool newChain = trig.getChain();
@@ -844,25 +837,27 @@ Triggers<URV>::pokeData1(URV trigIx, URV value)
 
   auto& trig = triggers_.at(trigIx);
 
-  Data1Bits d1bits(value); // Unpack value of attempted write.
+  // The chain rules below go by the value the poke leaves in tdata1, as in writeData1.
+  Data1Bits<URV> poked{trig.pokedData1(value)};
 
   // If next trigger has a dmode of 1 (debugger only), then clear
-  // chain bit in attempted wirte if write would also set dmode to 0.
+  // chain bit in attempted poke if poke would also set dmode to 0.
   // Otherwise we would have a chain with different dmodes.
-  if (trigIx + 1 < triggers_.size())
+  if (poked.isAddrData() and not poked.dmode() and trigIx + 1 < triggers_.size())
     {
       auto& nextTrig = triggers_.at(trigIx + 1);
-      if (nextTrig.isDebugModeOnly() and not d1bits.dmode())
+      if (nextTrig.isDebugModeOnly())
         {
-          d1bits.mcontrol_.chain_ = 0;
-          value = d1bits.value_;
+          Data1Bits<URV> bits{value};
+          bits.mcontrol_.chain_ = 0;  // Same bit as the chain of mcontrol6.
+          value = bits.value_;
         }
     }
 
-  // Write is ignored if it would set dmode and previous trigger has
+  // Poke fails if it would set dmode and previous trigger has
   // both dmode=0 and chain=1. Otherwise, we would have a chain with
   // different dmodes.
-  if (d1bits.dmode() and trigIx > 0)
+  if (poked.dmode() and trigIx > 0)
     {
       auto& prevTrig = triggers_.at(trigIx - 1);
       if (prevTrig.getChain() and not prevTrig.isDebugModeOnly())

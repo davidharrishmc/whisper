@@ -279,6 +279,18 @@ namespace WdRiscv
     bool isInstCount() const { return type() == TriggerType::Icount; }
     bool isEtrigger()  const { return type() == TriggerType::Etrigger; }
     bool isItrigger()  const { return type() == TriggerType::Itrigger; }
+    bool isTmext()     const { return type() == TriggerType::Tmext; }
+
+    /// Return true if the type has an action field.
+    bool hasAction() const
+    { return isAddrData() or isInstCount() or isEtrigger() or isItrigger() or isTmext(); }
+
+    /// Configuration dmode==0 and action==1 (enter debug) is not allowed.
+    void legalizeAction()
+    {
+      if (hasAction() and not dmode() and action() == TriggerAction::EnterDebug)
+        setAction(TriggerAction::RaiseBreak);
+    }
 
     /// Set the type field of tdata1.
     void setType(TriggerType type)
@@ -365,18 +377,27 @@ namespace WdRiscv
     URV readInfo() const
     { return info_.value_; }
 
-    /// Write the tdata1 register of the trigger. This is the interface for CSR
-    /// instructions.
-    void writeData1(bool debugMode, URV val)
+    /// Return true if this trigger supports the given type: its bit is set in tinfo. A
+    /// trigger configured without tinfo (info 0) supports only the type of its tdata1
+    /// reset value: without tinfo, the debug spec has a debugger read the one supported
+    /// type from tdata1.
+    bool supportsType(TriggerType type) const
+    {
+      unsigned info = info_.info();
+      if (info == 0)
+        return type == Data1Bits<URV>(data1Reset_).type();
+      return (info >> unsigned(type)) & 1;
+    }
+
+    /// Return the value that writeData1(debugMode, val) leaves in tdata1, without
+    /// writing it.
+    URV writtenData1(bool debugMode, URV val) const
     {
       if (isDebugModeOnly() and not debugMode)
-	return;
+	return data1_.value_;
       URV mask = data1WriteMask_;
       if (not debugMode)  // dmode bit writable only in debug mode
 	mask &= ~(URV(1) << (8*sizeof(URV) - 5));
-
-      if (not modifiedT1_)
-        prevData1_ = data1_.value_;
 
       // Writing 0 (None) into type is changed to 15 (Disabled). Section 5.7.2 of spec.
       Data1Bits<URV> valBits{val};
@@ -384,33 +405,32 @@ namespace WdRiscv
 	valBits.setType(TriggerType::Disabled);
       val = valBits.value_;
 
-      data1_.value_ = (val & mask) | (data1_.value_ & ~mask);
-      modifiedT1_ = true;
+      Data1Bits<URV> next{(val & mask) | (data1_.value_ & ~mask)};
 
-      if (data1_.isAddrData())
+      next.legalizeAction();
+      if (next.isAddrData())
 	{
-	  if (not data1_.dmode() and (data1_.mcontrol_.action_ == 1))
-	    data1_.mcontrol_.action_ = 0;
-          if (isReservedMatch(Match(data1_.mcontrol_.match_)))
-            data1_.mcontrol_.match_ = unsigned(Match::Equal);
-          if (data1_.isMcontrol())
-            data1_.mcontrol_.maskMax_ = napotMaskMax_;
+          if (isReservedMatch(Match(next.mcontrol_.match_)))
+            next.mcontrol_.match_ = unsigned(Match::Equal);
+          if (next.isMcontrol())
+            next.mcontrol_.maskMax_ = napotMaskMax_;
         }
-      else if (data1_.isInstCount())
-	{
-	  if (not data1_.dmode() and (data1_.icount_.action_ == 1))
-	    data1_.icount_.action_ = 0;
-	}
-      else if (data1_.isItrigger())
-        {
-	  if (not data1_.dmode() and (data1_.itrigger_.action_ == 1))
-	    data1_.itrigger_.action_ = 0;
-        }
-      else if (data1_.isEtrigger())
-        {
-	  if (not data1_.dmode() and (data1_.etrigger_.action_ == 1))
-	    data1_.etrigger_.action_ = 0;
-        }
+
+      return next.value_;
+    }
+
+    /// Write the tdata1 register of the trigger. This is the interface for CSR
+    /// instructions.
+    void writeData1(bool debugMode, URV val)
+    {
+      if (isDebugModeOnly() and not debugMode)
+	return;
+
+      if (not modifiedT1_)
+        prevData1_ = data1_.value_;
+
+      data1_.value_ = writtenData1(debugMode, val);
+      modifiedT1_ = true;
     }
 
     /// Write the tdata2 register of the trigger. This is the interface for CSR
@@ -449,16 +469,18 @@ namespace WdRiscv
       modifiedInfo_ = true;
     }
 
+    /// Return the value that pokeData1(x) leaves in tdata1, without writing it.
+    URV pokedData1(URV x) const
+    {
+      Data1Bits<URV> next{(x & data1PokeMask_) | (data1_.value_ & ~data1PokeMask_)};
+      next.legalizeAction();
+      return next.value_;
+    }
+
     /// Poke tdata1. This allows writing of modifiable bits that are read-only to the CSR
     /// instructions.
     void pokeData1(URV x)
-    {
-      URV val = (x & data1PokeMask_) | (data1_.value_ & ~data1PokeMask_);
-      data1_.value_ = val;
-      // Configuration dmode==0 and action==1 is not allowed.
-      if (data1_.mcontrol_.dmode_ == 0 and data1_.mcontrol_.action_ == 1)
-	data1_.mcontrol_.action_ = 0;
-    }
+    { data1_.value_ = pokedData1(x); }
 
     /// Poke tdata2. This allows writing of modifiable bits that are read-only to the CSR
     /// instructions.
@@ -773,8 +795,7 @@ namespace WdRiscv
     /// Return the action fields of the trigger.
     TriggerAction getAction() const
     {
-      if (data1_.isAddrData() or data1_.isInstCount() or data1_.isItrigger() or
-          data1_.isEtrigger())
+      if (data1_.hasAction())
 	return data1_.action();
       return TriggerAction::RaiseBreak;
     }
