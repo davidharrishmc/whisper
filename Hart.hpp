@@ -2995,6 +2995,16 @@ namespace WdRiscv
     void configVectorFpUnorderedSumCanonical(ElementWidth ew, bool flag)
     { vecRegs_.configVectorFpUnorderedSumCanonical(ew, flag); }
 
+    /// Configure the RVBNA (bulk-normalized dot-product) partition size (n) for the given
+    /// SEW. Unset (0, the default) means exactly one partition (n = vlmax).
+    void configVectorDotProdPartitionSize(ElementWidth ew, unsigned n)
+    { vecRegs_.configVectorDotProdPartitionSize(ew, n); }
+
+    /// Configure the RVBNA partition scheme for the given SEW. Only Linear is currently
+    /// implemented.
+    void configVectorDotProdPartitionScheme(ElementWidth ew, DotProdPartitionScheme s)
+    { vecRegs_.configVectorDotProdPartitionScheme(ew, s); }
+
     /// If flag is true, we always mark vector state as dirty when instruction would
     /// update vector register, regardless of whether the register is updated.
     void configVectorAlwaysMarkDirty(bool flag)
@@ -6711,6 +6721,11 @@ namespace WdRiscv
     float dotProdReduce(float acc, std::vector<float> prods, bool doTree, bool canonNan,
                         unsigned activeCount);
     void execVfbdota_vv(const DecodedInst*);
+
+    // RVBNA partition-combine helper (round-to-odd) for the 4 methods below. Not used by
+    // execVfbdota_vv above: per spec, vfbdota.vv sums products with the dynamic rounding
+    // mode instead (see dotProdReduce), never RVBNA/round-to-odd.
+    float combinePartitionResultsRTO(float acc, const std::vector<float>& results);
 
     // Zvfwdota16bf
     void execVfwdota_vv(const DecodedInst*);

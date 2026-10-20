@@ -71,6 +71,23 @@
                 "0x1000"
             ]
         },
+        "dot_product_partition_entry": {
+            "type": "object",
+            "properties": {
+                "n": {
+                    "$ref": "#/definitions/pow_of_2_int_or_hex_string"
+                },
+                "scheme": {
+                    "type": "string",
+                    "enum": [
+                        "linear"
+                    ]
+                }
+            },
+            "required": [
+                "n"
+            ]
+        },
         "sew_string": {
             "type": "string",
             "enum": [
@@ -1298,6 +1315,18 @@
                     "description": "Element widths for which vfredusum canonicalizes NaN results.",
                     "items": {
                         "$ref": "#/definitions/sew_string"
+                    }
+                },
+                "dot_product_partition": {
+                    "type": "object",
+                    "description": "Per-SEW RVBNA (bulk-normalized dot-product) partition size/scheme for the Zvdota/Zvbdota floating-point family (Zvfqwdota8f/Zvfqwbdota8f at e8, Zvfwdota16bf/Zvfwbdota16bf at e16). Unset (default) is one partition (n = vlmax), i.e. today's behavior.",
+                    "properties": {
+                        "e8": {
+                            "$ref": "#/definitions/dot_product_partition_entry"
+                        },
+                        "e16": {
+                            "$ref": "#/definitions/dot_product_partition_entry"
+                        }
                     }
                 },
                 "legalize_vsetvl_avl": {

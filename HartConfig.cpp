@@ -1210,6 +1210,73 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         }
     }
 
+  tag = "dot_product_partition";
+  if (vconf.contains(tag))
+    {
+      const auto& dpp = vconf.at(tag);
+      if (not dpp.is_object())
+        {
+          std::cerr << "Error: Invalid " << tag << " entry in config file (expecting an object)\n";
+          errors++;
+        }
+      else
+        for (auto it = dpp.begin(); it != dpp.end(); ++it)
+          {
+            std::string sewKey = it.key();
+            std::string prefix = util::join("", tag, ".", sewKey);
+            ElementWidth ew = ElementWidth::Byte;
+            if (not VecRegs::to_sew(sewKey, ew))
+              {
+                std::cerr << "Error: can't convert to valid SEW: " << prefix << '\n';
+                errors++;
+                continue;
+              }
+
+            const auto& item = it.value();
+            if (not item.is_object() or not item.contains("n"))
+              {
+                std::cerr << "Error: Config file " << prefix << " must be an object with an 'n' field\n";
+                errors++;
+                continue;
+              }
+
+            unsigned n = 0;
+            if (not getJsonUnsigned<unsigned>(prefix + ".n", item.at("n"), n))
+              {
+                errors++;
+                continue;
+              }
+            if (n == 0 or not isPowerOf2(n))
+              {
+                std::cerr << "Error: Config file " << prefix << ".n (" << n
+                          << ") must be a positive power of 2\n";
+                errors++;
+                continue;
+              }
+            hart.configVectorDotProdPartitionSize(ew, n);
+
+            if (item.contains("scheme"))
+              {
+                const auto& schemeItem = item.at("scheme");
+                if (not schemeItem.is_string())
+                  {
+                    std::cerr << "Error: Config file " << prefix << ".scheme must be a string\n";
+                    errors++;
+                    continue;
+                  }
+                std::string scheme = schemeItem.get<std::string>();
+                if (scheme == "linear")
+                  hart.configVectorDotProdPartitionScheme(ew, DotProdPartitionScheme::Linear);
+                else
+                  {
+                    std::cerr << "Error: Config file " << prefix << ".scheme (" << scheme
+                              << ") is not a recognized partition scheme\n";
+                    errors++;
+                  }
+              }
+          }
+    }
+
   tag = "always_mark_dirty";
   if (vconf.contains(tag))
     {
