@@ -40,6 +40,18 @@ namespace WdRiscv
 
   enum class TriggerOffset { Tdata1 = 0, Tdata2 = 1, Tdata3 = 2, Tinfo = 3 };
 
+  /// The hart state that the conditions in tdata3 (textra32/textra64) of a trigger
+  /// depend on.
+  template <typename URV>
+  struct TextraContext
+  {
+    URV mcontext = 0;
+    URV scontext = 0;
+    URV asid = 0;       // ASID of vsatp in VS and VU modes, ASID of satp otherwise.
+    URV vmid = 0;
+    bool hyperEnabled = false;  // Selects the legal mhselect values (legalData3).
+  };
+
 
   template <typename URV>
   struct Mcontrol;
@@ -345,9 +357,9 @@ namespace WdRiscv
     URV readData2() const
     { return data2_; }
 
-    /// Read the tdata3 register of the trigger (currently unused).
-    URV readData3() const
-    { return data3_; }
+    /// Read the tdata3 register of the trigger.
+    URV readData3(bool hyperEnabled) const
+    { return legalData3(data3_, hyperEnabled); }
 
     /// Read the tinfo register ot the trigger.
     URV readInfo() const
@@ -355,10 +367,10 @@ namespace WdRiscv
 
     /// Write the tdata1 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData1(bool debugMode, URV val)
+    void writeData1(bool debugMode, URV val)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
       URV mask = data1WriteMask_;
       if (not debugMode)  // dmode bit writable only in debug mode
 	mask &= ~(URV(1) << (8*sizeof(URV) - 5));
@@ -399,48 +411,42 @@ namespace WdRiscv
 	  if (not data1_.dmode() and (data1_.etrigger_.action_ == 1))
 	    data1_.etrigger_.action_ = 0;
         }
-
-      return true;
     }
 
     /// Write the tdata2 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData2(bool debugMode, URV value)
+    void writeData2(bool debugMode, URV value)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
 
       data2_ = (value & data2WriteMask_) | (data2_ & ~data2WriteMask_);
       modifiedT2_ = true;
 
       legalizeNapotData2();
       updateCompareMask();
-      return true;
     }
 
     /// Write the tdata3 register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeData3(bool debugMode, URV value)
+    void writeData3(bool debugMode, URV value, bool hyperEnabled)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
 
-      data3_ = (value & data3WriteMask_) | (data3_ & ~data3WriteMask_);
+      data3_ = legalData3((value & data3WriteMask_) | (data3_ & ~data3WriteMask_), hyperEnabled);
       modifiedT3_ = true;
-      return true;
     }
 
     /// Write the tinfo register of the trigger. This is the interface for CSR
     /// instructions.
-    bool writeInfo(bool debugMode, URV value)
+    void writeInfo(bool debugMode, URV value)
     {
       if (isDebugModeOnly() and not debugMode)
-	return false;
+	return;
 
       info_.value_ = (value & infoWriteMask_) | (info_.value_ & ~infoWriteMask_);
       modifiedInfo_ = true;
-
-      return true;
     }
 
     /// Poke tdata1. This allows writing of modifiable bits that are read-only to the CSR
@@ -466,8 +472,24 @@ namespace WdRiscv
 
     /// Poke tdata3. This allows writing of modifiable bits that are read-only to the CSR
     /// instructions.
-    void pokeData3(URV x)
-    { data3_ = (x & data3PokeMask_) | (data3_ & ~data3PokeMask_); }
+    void pokeData3(URV x, bool hyperEnabled)
+    { data3_ = legalData3((x & data3PokeMask_) | (data3_ & ~data3PokeMask_), hyperEnabled); }
+
+    /// Return the given tdata3 (textra32/textra64) value with its WARL select fields made
+    /// legal: 0 in place of a reserved mhselect (3 or 7) or sselect (3), and in place of
+    /// an mhselect other than 0 and 4 while hyperEnabled is false (hypervisor disabled).
+    static URV legalData3(URV value, bool hyperEnabled)
+    {
+      constexpr unsigned mhShift = sizeof(URV) == 8 ? 48 : 23;
+      unsigned mhselect = unsigned((value >> mhShift) & URV(0x7));
+      bool mhLegal = hyperEnabled ? (mhselect & 3) != 3 : (mhselect & 3) == 0;
+      if (not mhLegal)
+        value &= ~(URV(0x7) << mhShift);
+
+      if ((value & URV(0x3)) == 3)
+        value &= ~URV(0x3);
+      return value;
+    }
 
     /// Poke tinfo. This allows writing of modifiable bits that are read-only to the CSR
     /// instructions.
@@ -487,9 +509,10 @@ namespace WdRiscv
     { infoReset_ = reset; info_ = reset; infoWriteMask_ = mask; infoPokeMask_ = pokeMask;}
 
     /// Reset trigger.
-    void reset()
+    void reset(bool hyperEnabled)
     {
-      data1_.value_ = data1Reset_; data2_ = data2Reset_; data3_ = data3Reset_;
+      data1_.value_ = data1Reset_; data2_ = data2Reset_;
+      data3_ = legalData3(data3Reset_, hyperEnabled);
       if (data1_.isMcontrol())
         data1_.mcontrol_.maskMax_ = napotMaskMax_;
       writeData2(true, data2Reset_); // Define compare mask
@@ -543,155 +566,113 @@ namespace WdRiscv
     { return getAction() == TriggerAction::EnterDebug; }
 
     /// Return true if this trigger is enabled for loads (if isLoad is true) or for stores
-    /// (if isStore is true), for addresses, for the given timing and if it matches the
-    /// given data address.  Return false otherwise.
+    /// (if isStore is true), for addresses, for the given timing, if its tdata3 conditions
+    /// hold on the given context and if it matches the given data address.  Return false
+    /// otherwise.
     bool matchLdStAddr(URV address, unsigned size, TriggerTiming timing, bool isLoad,
-                       bool isStore, PrivilegeMode mode, bool virtMode, URV mcontext,
-                       URV scontext, URV asid, unsigned asidLen, URV& hitAddr) const;
+                       bool isStore, PrivilegeMode mode, bool virtMode,
+                       const TextraContext<URV>& context, URV& hitAddr) const;
 
     /// Return true if this trigger is enabled for loads (or stores if
-    /// isLoad is false), for data, for the given timing and if it
-    /// matches the given value address.  Return false otherwise.
+    /// isLoad is false), for data, for the given timing, if its tdata3
+    /// conditions hold on the given context and if it matches the given
+    /// value address.  Return false otherwise.
     bool matchLdStData(URV value, TriggerTiming timing, bool isLoad,
-                       PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext, URV asid, unsigned asidLen) const;
+                       PrivilegeMode mode, bool virtMode,
+                       const TextraContext<URV>& context) const;
 
     /// Return true if this trigger is enabled for instruction
-    /// addresses (execution), for the given timing and if it matches
-    /// the given address. Return false otherwise.
+    /// addresses (execution), for the given timing, if its tdata3
+    /// conditions hold on the given context and if it matches the given
+    /// address. Return false otherwise.
     bool matchInstAddr(URV address, unsigned size, TriggerTiming timing,
-                       PrivilegeMode mode, bool virtMode, URV& hitAddr) const;
+                       PrivilegeMode mode, bool virtMode,
+                       const TextraContext<URV>& context, URV& hitAddr) const;
 
     /// Return true if this trigger is enabled for instruction opcodes
-    /// (execution), for the given timing and if it matches the given
-    /// opcode.  Return false otherwise.
+    /// (execution), for the given timing, if its tdata3 conditions hold
+    /// on the given context and if it matches the given opcode.  Return
+    /// false otherwise.
     bool matchInstOpcode(URV opcode, TriggerTiming timing,
-                         PrivilegeMode mode, bool virtMode) const;
-    bool matchTextraScontext(URV scontext, URV asid, unsigned asidLen) const
+                         PrivilegeMode mode, bool virtMode,
+                         const TextraContext<URV>& context) const;
+
+    /// Return true if the given hart state satisfies the mhselect and sselect conditions
+    /// of tdata3: textra64 when URV is 64 bits, textra32 when it is 32 bits.
+    bool matchTextra(const TextraContext<URV>& context) const
     {
-      // RV64:
-      //   sselect   = bits 1:0, sbytemask = bits 35:32, svalue= bits 63:51
-      // RV32:
-      //   sselect   = bits 1:0, sbytemask = bits 19:16, svalue = bits 31:26.
+      constexpr bool rv64 = sizeof(URV) == 8;
+      constexpr unsigned mhselectShift = rv64 ? 48 : 23;
+      constexpr unsigned mhvalueShift = rv64 ? 51 : 26;
+      constexpr URV mhvalueMask = rv64 ? 0x1fff : 0x3f;
+      constexpr URV mhvalueExtMask = (mhvalueMask << 1) | 1;
+      constexpr unsigned sbytemaskShift = rv64 ? 36 : 18;
+      constexpr unsigned svalueBytes = rv64 ? 4 : 2;
+      constexpr URV svalueMask = rv64 ? 0xffffffff : 0xffff;
+      constexpr URV asidMask = rv64 ? 0xffff : 0x1ff;       // ASIDMAX bits.
 
-      if constexpr (sizeof(URV) == 8)
+      // The conditions are those of the value a CSR read of tdata3 returns.
+      URV data3 = readData3(context.hyperEnabled);
+
+      unsigned mhselect = unsigned((data3 >> mhselectShift) & 7);
+      URV mhvalue = (data3 >> mhvalueShift) & mhvalueMask;
+      // {mhvalue, mhselect[2]}, as wide as VMIDMAX.
+      URV mhvalueExt = (mhvalue << 1) | (mhselect >> 2);
+
+      switch (mhselect)
         {
-          unsigned sselect = unsigned(data3_ & URV(0x3));
+        case 4:  // mcontext
+          if ((context.mcontext & mhvalueMask) != mhvalue)
+            return false;
+          break;
 
-          if (sselect == 0 or sselect == 3)
-            return true;
-          if (sselect == 2)                      //ASID match
-            {
-              URV svalue = data3_ >> 2; 
-              URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
-              return (svalue & amask) == (asid & amask);
-            }
+        case 1:  // mcontext_select
+        case 5:
+          if ((context.mcontext & mhvalueExtMask) != mhvalueExt)
+            return false;
+          break;
 
-          URV svalue = (data3_ >> 2) & URV(0xffffffff);
-          unsigned sbytemask = unsigned((data3_ >> 36) & URV(0xf));
+        case 2:  // vmid_select
+        case 6:
+          if (context.vmid != mhvalueExt)
+            return false;
+          break;
 
-          URV mask = URV(0);
-
-          for (unsigned i = 0; i < 4; ++i)
-            {
-              if ((sbytemask >> i) & 1)
-                mask |= ~(URV(0xff) << (8 * i));
-            }
-
-          return (scontext & mask) == (svalue & mask);
+        default:  // 0: ignore.
+          break;
         }
-      else
+
+      URV svalue = (data3 >> 2) & svalueMask;
+
+      switch (unsigned(data3 & 3))
         {
-          unsigned sselect = unsigned(data3_ & URV(0x3));
+        case 1:  // scontext: a byte whose sbytemask bit is set is not compared.
+          {
+            URV mask = svalueMask;
+            for (unsigned i = 0; i < svalueBytes; ++i)
+              if ((data3 >> (sbytemaskShift + i)) & 1)
+                mask &= ~(URV(0xff) << (8*i));
+            return ((context.scontext ^ svalue) & mask) == 0;
+          }
 
-          if (sselect == 0 or sselect == 3)
-            return true;
-          if (sselect == 2)                      // NEW: ASID match
-            {
-              URV svalue = data3_ >> 2;  
-              URV amask  = (asidLen >= sizeof(URV)*8) ? ~URV(0) : ((URV(1) << asidLen) - 1);
-              return (svalue & amask) == (asid & amask);
-            }
+        case 2:  // asid
+          return context.asid == (svalue & asidMask);
 
-          URV svalue = (data3_ >> 2) & URV(0xfff);
-          unsigned sbytemask = unsigned((data3_ >> 18) & URV(0x3));
-
-          URV mask = URV(0);
-
-          for (unsigned i = 0; i < 2; ++i)
-            {
-              if ((sbytemask >> i) & 1)
-                mask |= ~(URV(0xff) << (8 * i));
-            }
-
-          return (scontext & mask) == (svalue & mask);
+        default:  // 0: ignore.
+          return true;
         }
     }
 
-    bool matchTextraMcontext(URV mcontext) const
-    {
-      // RV64: mhselect = bits 50:48, mhvalue = bits 63:51.
-      // RV32: mhselect = bits 25:23, mhvalue = bits 31:26.
+    /// Return true if this trigger is enabled for given mode and its
+    /// tdata3 conditions hold on the given context. Return false
+    /// otherwise. This is called for both instruction retire and trap
+    /// scenarios.
 
-      if constexpr (sizeof(URV) == 8)
-        {
-          unsigned mhselect = unsigned((data3_ >> 48) & URV(0x7));
-
-          if (mhselect != 4)
-            return true;
-
-          URV mhvalue = (data3_ >> 51) & URV(0x1fff);
-          return mhvalue == (mcontext & URV(0x1fff));
-        }
-      else
-        {
-          unsigned mhselect = unsigned((data3_ >> 23) & URV(0x7));
-
-          if (mhselect != 4)
-            return true;
-
-          URV mhvalue = (data3_ >> 26) & URV(0x3f);
-          return mhvalue == (mcontext & URV(0x3f));
-        }
-    }
-
-    /// Return true if this trigger is enabled for given mode.
-    /// Return false otherwise. This is called for both
-    /// instruction retire and trap scenarios.
-
-    bool matchInstCount(PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext, URV asid, unsigned asidLen)
+    bool matchInstCount(PrivilegeMode mode, bool virtMode, const TextraContext<URV>& context)
     {
       if (not data1_.isInstCount())
 	return false;  // Not an icount trigger.
-      Icount<URV>& icount = data1_.icount_;
-
-      if (mode == PrivilegeMode::Machine and not icount.m_)
-	return false;  // Trigger is not enabled.
-
-      if (mode == PrivilegeMode::Supervisor and not virtMode and not icount.s_)
-	return false;  // Trigger is not enabled.
-
-      if (mode == PrivilegeMode::User and not virtMode and not icount.u_)
-	return false;  // Trigger is not enabled.
-
-      if (mode == PrivilegeMode::Supervisor and virtMode and not icount.vs_)
-	return false;  // Trigger is not enabled.
-
-      if (mode == PrivilegeMode::User and virtMode and not icount.vu_)
-	return false;  // Trigger is not enabled.
-
-      if (mode == PrivilegeMode::Reserved)
-        return false;
-
-      if (not matchTextraMcontext(mcontext))
-        return false;
-        
-      if (not matchTextraScontext(scontext, asid, asidLen))
-        return false;
-
-      if (not matchTextraScontext(scontext, asid, asidLen))
-        return false;
-
-      return true;
+      return matchModeAndTextra(data1_.icount_, mode, virtMode, context);
     }
 
     /// If this trigger is enabled and is of type icount, then make it
@@ -917,23 +898,33 @@ namespace WdRiscv
       return ok;
     }
 
+    /// Return true if the control ctl (the mcontrol, mcontrol6, icount, itrigger or
+    /// etrigger view of tdata1) enables this trigger in the given mode and the tdata3
+    /// conditions hold on the given context.
+    template <typename C>
+    bool matchModeAndTextra(const C& ctl, PrivilegeMode mode, bool virtMode,
+                            const TextraContext<URV>& context) const;
+
     // Helper to public matchLdStAddr.
     template <typename M>
     bool matchLdStAddr(URV address, unsigned size, TriggerTiming timing, bool isLoad,
-                       bool isStore, PrivilegeMode mode, bool virtMode, URV mcontext,
-                       URV scontext, URV asid, unsigned asidLen, URV& hitAddr) const;
+                       bool isStore, PrivilegeMode mode, bool virtMode,
+                       const TextraContext<URV>& context, URV& hitAddr) const;
 
     template <typename M>
     bool matchLdStData(URV value, TriggerTiming timing, bool isLoad,
-                       PrivilegeMode mode, bool virtMode, URV mcontext, URV scontext, URV asid, unsigned asidLen) const;
+                       PrivilegeMode mode, bool virtMode,
+                       const TextraContext<URV>& context) const;
 
     template <typename M>
     bool matchInstAddr(URV address, unsigned size, TriggerTiming timing,
-                       PrivilegeMode mode, bool virtMode, URV& hitAddr) const;
+                       PrivilegeMode mode, bool virtMode,
+                       const TextraContext<URV>& context, URV& hitAddr) const;
 
     template <typename M>
     bool matchInstOpcode(URV opcode, TriggerTiming timing,
-                         PrivilegeMode mode, bool virtMode) const;
+                         PrivilegeMode mode, bool virtMode,
+                         const TextraContext<URV>& context) const;
 
     /// Return true if given match type compares against all data addresses of an
     /// instruction (2 address of lh, 4 for lw, ...), return false otherwise indicating
@@ -964,12 +955,12 @@ namespace WdRiscv
 
     URV data1WriteMask_   = ~URV(0);
     URV data2WriteMask_   = ~URV(0);
-    URV data3WriteMask_   = 0;              // Place holder.
+    URV data3WriteMask_   = 0;
     URV infoWriteMask_    = 0;              // Fields of tinfo are read-only.
 
     URV data1PokeMask_   = ~URV(0);
     URV data2PokeMask_   = ~URV(0);
-    URV data3PokeMask_   = 0;              // Place holder.
+    URV data3PokeMask_   = 0;
     URV infoPokeMask_    = ~URV(0);
 
     URV data2CompareMask_ = ~URV(0);
@@ -1035,22 +1026,19 @@ namespace WdRiscv
     bool readControl(URV trigger, URV& value) const;
 
     /// Set the tdata1 register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds.
+    /// success and false if trigger is out of bounds.
     bool writeData1(URV trigger, bool debugMode, URV value);
 
     /// Set the tdata2 register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds or if
-    /// tdata2 is not implemented.
+    /// success and false if trigger is out of bounds.
     bool writeData2(URV trigger, bool debugMode, URV value);
 
     /// Set the tdata3 register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds or if
-    /// tdata3 is not implemented.
+    /// success and false if trigger is out of bounds.
     bool writeData3(URV trigger, bool debugMode, URV value);
 
     /// Set the tinfo register of the given trigger to the given value. Return true on
-    /// success and false (leaving value unmodified) if trigger is out of bounds or if
-    /// tinfo is not implemented.
+    /// success and false if trigger is out of bounds.
     bool writeInfo(URV trigger, bool debugMode, URV value);
 
     /// Set the tcontrol register of the given trigger to the given value. Return true on
@@ -1094,41 +1082,46 @@ namespace WdRiscv
     /// is satisfied.
     bool ldStAddrTriggerHit(URV address, unsigned size, TriggerTiming, bool isLoad,
                             bool isStore, PrivilegeMode mode, bool virtMode, bool ie,
-                            URV mcontext, URV scontext, URV asid, unsigned asidLen,
-                            URV& hitAddr);
+                            const TextraContext<URV>& context, URV& hitAddr);
 
     /// Similar to ldStAddrTriggerHit but for data match.
     bool ldStDataTriggerHit(URV value, TriggerTiming, bool isLoad,
-                            PrivilegeMode mode, bool virtMode, bool ie, URV mcontext, URV scontext, URV asid, unsigned asidLen);
+                            PrivilegeMode mode, bool virtMode, bool ie,
+                            const TextraContext<URV>& context);
 
     /// Similar to ldStAddrTriggerHit but for instruction address.
     bool instAddrTriggerHit(URV address, unsigned size, TriggerTiming timing,
-                            PrivilegeMode mode, bool virtMode, bool ie, URV& hitAddr);
+                            PrivilegeMode mode, bool virtMode, bool ie,
+                            const TextraContext<URV>& context, URV& hitAddr);
 
     /// Similar to instAddrTriggerHit but for instruction opcode.
     bool instOpcodeTriggerHit(URV opcode, TriggerTiming timing,
-                              PrivilegeMode mode, bool virtMode, bool ie);
+                              PrivilegeMode mode, bool virtMode, bool ie,
+                              const TextraContext<URV>& context);
 
     /// Make every active icount trigger count down unless it was written by the current
     /// instruction. If a count-down register becomes zero as a result of the count-down
     /// and the associated actions is not suppressed (e.g. action is ebreak exception and
     /// interrupts are disabled), then consider the trigger as having tripped and set its
     /// hit bit to 1.
-    void evaluateIcount(PrivilegeMode mode, bool virtMode, bool ie, bool skipModifed, URV mcontext, URV scontext, URV asid, unsigned asidLen);
+    void evaluateIcount(PrivilegeMode mode, bool virtMode, bool ie, bool skipModifed,
+                        const TextraContext<URV>& context);
 
-    bool icountTriggerFired(PrivilegeMode mode, bool virtMode, bool interruptEnabled, URV mcontext, URV scontext, URV asid, unsigned asidLen);
+    bool icountTriggerFired(PrivilegeMode mode, bool virtMode, bool interruptEnabled,
+                            const TextraContext<URV>& context);
 
     /// Set the hit bit of every exception-trigger (etrigger) that matches. Return true if
     /// one of them has the "raise breakpoint" or "enter debug mode" action, and set
     /// enterDebug if one has the latter. The mode/virtMode are those the trap was taken
     /// from; handlerMode is the mode it was taken into, where the trigger fires.
     bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
-                       PrivilegeMode handlerMode, bool interruptEnabled, bool& enterDebug);
+                       PrivilegeMode handlerMode, bool interruptEnabled,
+                       const TextraContext<URV>& context, bool& enterDebug);
 
     /// Same as expTriggerHit but for the interrupt-triggers (itrigger).
     bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode,
-                       PrivilegeMode handlerMode, bool interruptEnabled, bool& enterDebug,
-                       bool isNmi);
+                       PrivilegeMode handlerMode, bool interruptEnabled,
+                       const TextraContext<URV>& context, bool& enterDebug, bool isNmi);
 
     /// Return the tigger at the given index. Reurn None if index is out of bounds.
     TriggerType triggerType(URV trigger) const
@@ -1422,6 +1415,7 @@ namespace WdRiscv
     std::vector< Trigger<URV> > triggers_;
     bool mmodeEnabled_ = true;  // Triggers trip in Machine mode when true.
     bool tcontrolEnabled_ = true;
+    bool hyperEnabled_ = false;
     bool clearData1OnDisabled_ = false;
     bool clearUnsupportedAction_ = false;
 

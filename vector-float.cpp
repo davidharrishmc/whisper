@@ -8482,8 +8482,14 @@ namespace WdRiscv
     bool nan = exp == maxExp and ((e4m3 and mant == 7) or (not e4m3 and mant != 0));
     if (nan)
       {
-        auto bf16 = std::numeric_limits<BFloat16>::quiet_NaN();
-        return std::bit_cast<uint16_t>(bf16);
+        unsigned mantMsbMask = e4m3 ? 0x4u : 0x2u;
+        bool quiet = (mant & mantMsbMask) != 0;
+        if (quiet)
+          {
+            auto bf16 = std::numeric_limits<BFloat16>::quiet_NaN();
+            return std::bit_cast<uint16_t>(bf16);
+          }
+        return (0xFFu << 7) | 0x1u;
       }
 
     if (exp > 0)   // Normalized

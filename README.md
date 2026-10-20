@@ -68,7 +68,7 @@ simulator. In particular you would need:
 3. The Whisper source code which can be downloaded from 
    [github.](https://github.com/tenstorrent/SweRV-ISS)
 
-4. The g++ compiler version 11 or higher to compile Whisper. The g++
+4. The g++ compiler version 13 or higher to compile Whisper. The g++
    compiler can be installed from a Linux distribution. Alternatively,
    the source code can be downloaded from
    [gnu.org/software/gcc.](https://www.gnu.org/software/gcc)
@@ -946,6 +946,14 @@ The vector configuration is an object with the following fields:
 
 * fp_usum_nan_canonicalize: for each EEW, enables use of canonical NaN in
   vfredusum/vfwredusum result, default is false.
+
+* dot_product_partition: for each EEW (only "e8" and "e16" have any effect, matching the
+  Zvfqwdota8f/Zvfqwbdota8f and Zvfwdota16bf/Zvfwbdota16bf RVBNA floating-point dot-product
+  extensions respectively), configures the RVBNA partition size ("n", a power of 2) and
+  partition scheme ("scheme", only "linear" is currently supported) used to split a VLMAX-wide
+  dot product into multiple independently-normalized partitions. Default (unset) is one
+  partition (n = vlmax), i.e. today's un-partitioned behavior. Example:
+  `"dot_product_partition": {"e8": {"n": 8, "scheme": "linear"}}`.
 
 * partial_segment_load: partially commit the fields of a load segment encountering
   an exception/trigger-hit at a given index when true and commit no field in the case of
