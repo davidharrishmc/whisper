@@ -1052,6 +1052,31 @@ Triggers<URV>::enableHypervisor(bool flag)
 
 
 template <typename URV>
+void
+Triggers<URV>::enableMode(PrivilegeMode mode, bool flag)
+{
+  bool super = mode == PrivilegeMode::Supervisor;
+
+  Data1Bits<URV> mc(0), ic(0);
+  mc.mcontrol6_.s_ = super;      // Same bits in mcontrol.
+  mc.mcontrol6_.u_ = not super;
+  ic.icount_.s_ = super;         // Same bits in itrigger and etrigger.
+  ic.icount_.u_ = not super;
+
+  using TT = TriggerType;
+  for (auto type : { TT::Mcontrol, TT::Mcontrol6, TT::Icount, TT::Itrigger, TT::Etrigger })
+    {
+      URV bits = (type == TT::Mcontrol or type == TT::Mcontrol6) ? mc.value_ : ic.value_;
+      for (auto masks : { &data1ReadMasks_, &data1WriteMasks_ })
+        {
+          URV& mask = masks->at(unsigned(type));
+          mask = flag ? mask | bits : mask & ~bits;
+        }
+    }
+}
+
+
+template <typename URV>
 Trigger<URV>::Trigger(URV data1, URV data2, URV /*data3*/,
                       URV mask1, URV mask2, URV mask3)
   : data1_(data1), data2_(data2), data1WriteMask_(mask1),

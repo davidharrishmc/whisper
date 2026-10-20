@@ -1344,6 +1344,10 @@ namespace WdRiscv
     /// Enable hypervisor mode.
     void enableHypervisor(bool flag);
 
+    /// Enable supervisor or user mode: The s or u bits of tdata1 are read-only-zero if
+    /// that mode is disabled.
+    void enableMode(PrivilegeMode mode, bool flag);
+
     /// Set the read mask of TDATA1 when the type is disabled (15): internal value is
     /// anded with this mask on CSR read. Default value makes most significant 5 bits of
     /// TDATA1 visible and the remaining bits 0.

@@ -1734,6 +1734,7 @@ CsRegs<URV>::enableUserMode(bool flag)
     }
 
   updateSstc();  // To activate/deactivate STIMECMP (depends on MCOUNTEREN).
+  triggers_.enableMode(PrivilegeMode::User, flag);
 }
 
 
@@ -1827,6 +1828,7 @@ CsRegs<URV>::enableSupervisorMode(bool flag)
   enableAia(aiaEnabled_);       // To activate/deactivate AIA supervisor CSRs.
   enableSdtrig(sdtrigOn_);      // To activate/deactivate SCONTEXT.
   enableSsqosid(ssqosidOn_);    // To activate/deactivate SRMCFG.
+  triggers_.enableMode(PrivilegeMode::Supervisor, flag);
 
   if (not flag)
     {
