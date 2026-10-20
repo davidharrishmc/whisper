@@ -6099,7 +6099,9 @@ Hart<URV>::fetchInstWithTrigger(URV addr, uint64_t& physAddr, uint32_t& inst, FI
   bool hasTrig = hasActiveInstTrigger();
   if (hasTrig)
     {
-      instAddrTriggerHit(addr, 4 /*size*/, TriggerTiming::Before);
+      uint32_t peek = 0;  // To get the instruction size before the fetch.
+      unsigned size = readInst(addr, peek) ? instructionSize(peek) : 4;
+      instAddrTriggerHit(addr, size, TriggerTiming::Before);
       if (breakpOrEnterDebugTripped())
         {
           if (mcycleEnabled())

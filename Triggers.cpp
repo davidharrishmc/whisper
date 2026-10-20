@@ -1466,6 +1466,12 @@ Trigger<URV>::matchInstOpcode(URV opcode, TriggerTiming timing,
 
   if (getTiming() == timing and Select(ctl.select_) == Select::MatchData and ctl.execute_)
     {
+      // A non-zero mcontrol6 size only matches instructions of that size: 2 for 16-bit
+      // and 3 for 32-bit.
+      if constexpr (std::is_same_v<M, decltype(data1_.mcontrol6_)>)
+        if (unsigned size = data1_.mcontrol6_.size_; size != 0 and size != ((opcode & 3) == 3 ? 3u : 2u))
+          return false;
+
       auto match = Match(data1_.mcontrol_.match_);
       return doMatch(opcode, match);
     }
