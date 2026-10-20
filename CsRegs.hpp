@@ -1338,7 +1338,7 @@ namespace WdRiscv
     {
       bool chainHit =
         triggers_.ldStAddrTriggerHit(addr, size, t, isLoad, isStore, mode, virtMode, ie,
-                                     mcontext(), scontext(), asid(), asidLen(), hitAddr);
+                                     textraContext(virtMode), hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1351,7 +1351,7 @@ namespace WdRiscv
     {
       bool chainHit =
         triggers_.ldStDataTriggerHit(data, t, isLoad, mode, virtMode, ie,
-                                     mcontext(),scontext(), asid(), asidLen());
+                                     textraContext(virtMode));
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1362,7 +1362,8 @@ namespace WdRiscv
     bool instAddrTriggerHit(URV addr, unsigned size, TriggerTiming t, PrivilegeMode mode,
                             bool virtMode, bool ie, URV& hitAddr)
     {
-      bool chainHit = triggers_.instAddrTriggerHit(addr, size, t, mode, virtMode, ie, hitAddr);
+      bool chainHit = triggers_.instAddrTriggerHit(addr, size, t, mode, virtMode, ie,
+                                                   textraContext(virtMode), hitAddr);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1373,7 +1374,8 @@ namespace WdRiscv
     bool instOpcodeTriggerHit(URV opcode, TriggerTiming t, PrivilegeMode mode,
                               bool virtMode, bool ie)
     {
-      bool chainHit = triggers_.instOpcodeTriggerHit(opcode, t, mode, virtMode, ie);
+      bool chainHit = triggers_.instOpcodeTriggerHit(opcode, t, mode, virtMode, ie,
+                                                     textraContext(virtMode));
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1385,8 +1387,8 @@ namespace WdRiscv
     bool intTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
                        bool ie, bool& enterDebug, bool isNmi = false)
     {
-      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie, enterDebug,
-                                          isNmi);
+      bool fire = triggers_.intTriggerHit(cause, mode, virtMode, handlerMode, ie,
+                                          textraContext(virtMode), enterDebug, isNmi);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1397,47 +1399,34 @@ namespace WdRiscv
     bool expTriggerHit(URV cause, PrivilegeMode mode, bool virtMode, PrivilegeMode handlerMode,
                        bool ie, bool& enterDebug)
     {
-      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie, enterDebug);
+      bool fire = triggers_.expTriggerHit(cause, mode, virtMode, handlerMode, ie,
+                                          textraContext(virtMode), enterDebug);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
       return fire;
     }
 
-    URV mcontext() const
+    /// Return the hart state that the tdata3 conditions of a trigger depend on when the
+    /// hart runs with the given virtual mode (V bit).
+    TextraContext<URV> textraContext(bool virtMode) const
     {
-      const auto& csr = regs_.at(size_t(CsrNumber::MCONTEXT));
-      return csr.read();
+      TextraContext<URV> context;
+      context.mcontext = regs_.at(size_t(CsrNumber::MCONTEXT)).read();
+      context.scontext = regs_.at(size_t(CsrNumber::SCONTEXT)).read();
+      auto satpNum = virtMode ? CsrNumber::VSATP : CsrNumber::SATP;
+      context.asid = SatpFields<URV>(regs_.at(size_t(satpNum)).read()).bits_.ASID;
+      context.vmid = HgatpFields<URV>(regs_.at(size_t(CsrNumber::HGATP)).read()).bits_.VMID;
+      context.hyperEnabled = hyperEnabled_;
+      return context;
     }
-    
-    URV scontext() const
-    {
-      const auto& csr = regs_.at(size_t(CsrNumber::SCONTEXT));
-      return csr.read();
-    }
-
-    URV asid() const
-    {
-      const auto& csr = regs_.at(size_t(CsrNumber::SATP));
-
-      if constexpr (sizeof(URV) == 8)
-	    return (csr.read() >> 44) & URV(0xffff);
-      else
-	    return (csr.read() >> 22) & URV(0x1ff);
-     }
-
-    unsigned asidLen() const
-    {
-      return sizeof(URV) == 8 ? 16 : 9;
-    }
-
 
     /// Make every active icount trigger count down unless it was written by the current
     /// instruction. Set the hit bit of a counted-down register if its value becomes
     /// zero
     void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie, bool skipModified)
     {
-      triggers_.evaluateIcount(mode, virtMode, ie, skipModified, mcontext(), scontext(), asid(), asidLen());
+      triggers_.evaluateIcount(mode, virtMode, ie, skipModified, textraContext(virtMode));
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -1446,7 +1435,7 @@ namespace WdRiscv
     /// Return true if a pending icount trigger can fire clearing its pending status.
     bool icountTriggerFired(PrivilegeMode mode, bool virtMode, bool ie)
     {
-      return triggers_.icountTriggerFired(mode, virtMode, ie, mcontext(), scontext(), asid(), asidLen());
+      return triggers_.icountTriggerFired(mode, virtMode, ie, textraContext(virtMode));
     }
 
     /// Set pre and post to the count of "before"/"after" triggers
