@@ -1104,6 +1104,9 @@ components in a system with 2 trigger registers (the mask and reset values are m
          }
      ],
 ```
+The types a trigger supports are the bits set in the info field of its tinfo. A trigger
+configured without tinfo (fewer than 4 components, or an info field of 0) supports only the
+type of its tdata1 reset value.
 
 ### all_ld_st_addr_trigger
 
@@ -1136,6 +1139,10 @@ can be included with in "trigger_types" are:
    "none", "mcontrol", "icount", "itrigger", "etriger", "mcontrol6",
    "tmexttriger", and "disabled"
 ```
+A CSR instruction that writes TDATA1 with a type the trigger does not support (missing from
+"trigger_types", or not supported by the trigger: see "trigger registers") disables the
+trigger: the type becomes 15 where the type field is writable, and the other writable bits
+of TDATA1 except DMODE are cleared.
 
 ### trigger_actions
 Define the supported trigger actions (action field in tdata1). Example:
