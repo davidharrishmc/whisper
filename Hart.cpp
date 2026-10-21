@@ -6160,6 +6160,8 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 {
   traceFileActive_ = (traceFile != nullptr);  // gates the per-instruction trace reset
 
+  SimulatorRoundingScope roundingScope{getFpRoundingMode()};
+
   std::string instStr;
   instStr.reserve(128);
 
@@ -6448,6 +6450,8 @@ template <typename URV>
 bool
 Hart<URV>::simpleRun()
 {
+  SimulatorRoundingScope roundingScope{getFpRoundingMode()};
+
   // For speed: do not record/clear CSR changes.
   csRegs_.enableRecordWrite(false);
   pmpMgr_.enableTrace(false);
@@ -7581,6 +7585,8 @@ void
 Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
 {
   traceFileActive_ = (traceFile != nullptr);  // gates the per-instruction trace reset
+
+  SimulatorRoundingScope roundingScope{getFpRoundingMode()};
 
   std::string instStr;
 
