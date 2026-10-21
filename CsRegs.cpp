@@ -5184,7 +5184,6 @@ CsRegs<URV>::updateFcsrGroupForPoke(CsrNumber number, URV value)
 	  FcsrFields fields{fcsr->read()};
 	  fields.bits_.FRM = value;
 	  fcsr->poke(fields.value_);
-          setSimulatorRoundingMode(RoundingMode(fields.bits_.FRM));
 	}
       return;
     }
@@ -5199,7 +5198,6 @@ CsRegs<URV>::updateFcsrGroupForPoke(CsrNumber number, URV value)
       auto frm = getImplementedCsr(CsrNumber::FRM);
       if (frm and frm->read() != fields.bits_.FRM)
         frm->poke(fields.bits_.FRM);
-      setSimulatorRoundingMode(RoundingMode(fields.bits_.FRM));
     }
 }
 
